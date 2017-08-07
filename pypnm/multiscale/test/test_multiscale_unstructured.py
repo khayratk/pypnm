@@ -8,7 +8,7 @@ from pypnm.multiscale.multiscale_sim import MultiScaleSimUnstructured
 from pypnm.porenetwork.network_factory import unstructured_network
 import logging
 
-def test_multiscale_fixed_flux():
+def multiscale_fixed_flux():
 
     comm = Epetra.PyComm()
     my_id = comm.MyPID()

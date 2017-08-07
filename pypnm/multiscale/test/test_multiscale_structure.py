@@ -6,7 +6,7 @@ from pypnm.porenetwork.network_factory import structured_network
 from sim_settings import sim_settings
 
 
-def test_multiscale_fixed_pressure():
+def multiscale_fixed_pressure():
     nx, ny, nz = 6, 3, 3
     n_fine_per_cell = 5
 
@@ -26,7 +26,7 @@ def test_multiscale_fixed_pressure():
         multiscale_sim.output_hd5(i, "hf5_structured_pressure_bc")
 
 
-def test_multiscale_fixed_flux():
+def multiscale_fixed_flux():
     nx, ny, nz = 6, 3, 3
     n_fine_per_cell = 5
     q_inlet = 1.e-7
