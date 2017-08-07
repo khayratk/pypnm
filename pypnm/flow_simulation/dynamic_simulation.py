@@ -51,7 +51,7 @@ class DynamicSimulation(Simulation):
         self.sat_comp = self.SatComputer(network, self.bool_accounted_pores)
 
         self.press_solver = PressureSolverDynamicDirichlet(self.network)
-        self.solver_type = "AMG"
+        self.press_solver_type = "AMG"
 
         self.pc_comp = DynamicCapillaryPressureComputer(network)
         self.k_comp = ConductanceCalc(network)
@@ -165,7 +165,7 @@ class DynamicSimulation(Simulation):
             press_solver.set_dirichlet_pores(pi_list=pi_dirichlet, value=0.0)
 
         logger.debug("Fixing boundary conditions")
-        self.network.pores.p_w[:] = press_solver.solve(self.solver_type)
+        self.network.pores.p_w[:] = press_solver.solve(self.press_solver_type)
 
         self.network.pores.p_n[:] = self.network.pores.p_w + self.network.pores.p_c
 
@@ -476,10 +476,7 @@ class DynamicSimulation(Simulation):
             if self.ti_freeze_displacement[key] > 20:
                 del self.ti_freeze_displacement[key]
 
-        print "="*100
-        print "FROZEN TUBES ARE"
-        print self.ti_freeze_displacement.keys()
-        print "=" * 100
+        logger.debug("frozen tubes are currently %s", self.ti_freeze_displacement.keys())
 
         for iter in xrange(10000):
             is_event = update_tube_piston_w(network, self.piston_entry, self.flux_n, self.rhs_source_nonwett)
