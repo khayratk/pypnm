@@ -95,7 +95,10 @@ def petsc_solve_from_ksp(ksp, rhs, x=None, tol=1e-5):
         petsc_sol = petsc_rhs.duplicate()
     else:
         petsc_sol = PETSc.Vec().createWithArray(x)
-    ksp.setInitialGuessNonzero(True)
+
+    if not ksp.getType() == "preonly":
+        ksp.setInitialGuessNonzero(True)
+
     ksp.solve(petsc_rhs, petsc_sol)
 
     return petsc_sol.getArray()
