@@ -48,8 +48,9 @@ class Simulation(object):
         assert len(array) == self.network.nr_t
         self.vtk_writer.add_tube_field(array, array_name)
 
-    def write_vtk_output(self, name):
-        self.vtk_writer.write(name)
+    def write_vtk_output(self, label):
+        output_filename = "dynamic" + str(label).zfill(8)
+        self.vtk_writer.write(output_filename)
 
     def set_post_processing_window_bounds(self, bounding_percent):
         eps = 1e-10
