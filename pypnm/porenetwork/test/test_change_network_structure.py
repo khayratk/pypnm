@@ -12,7 +12,7 @@ def test_change_coordination_number():
 
     ti_list = choose_edges_for_target_coord_num(network, target_coord_number)
     ti_list_remove = component.complement_tube_set(network, ti_list)
-    network.remove_tubes(ti_list_remove)
+    network.remove_throats(ti_list_remove)
 
 
 def test_delete_tubes():
@@ -23,7 +23,7 @@ def test_delete_tubes():
 
     removed_tubes = [0, 1, 2, 8]
 
-    network.remove_tubes(removed_tubes)
+    network.remove_throats(removed_tubes)
 
     for field in [network.tubes.r, network.tubes.l, network.tubes.G]:
         assert (len(field) == nr_tubes_prev - len(removed_tubes))
