@@ -202,39 +202,6 @@ class StructuredPoreNetwork(PoreNetwork):
                         self.p_adj[ind, 0] = -1
                         self.p_adj[ind, 5] = -1
 
-    def remove_connections_between_face_pores(self, FACE):
-        assert (FACE in FACES)
-        if FACE == BOTTOM:
-            self.remove_connections_between_pores_in_z_plane(k=0)
-        if FACE == TOP:
-            self.remove_connections_between_pores_in_z_plane(k=self.Nz - 1)
-        if FACE == SOUTH:
-            self.remove_connections_between_pores_in_y_plane(j=0)
-        if FACE == NORTH:
-            self.remove_connections_between_pores_in_y_plane(j=self.Ny - 1)
-        if FACE == EAST:
-            self.remove_connections_between_pores_in_x_plane(i=0)
-        if FACE == WEST:
-            self.remove_connections_between_pores_in_x_plane(i=self.Nx - 1)
-
-    def remove_connections_between_pores_in_x_plane(self, i):
-        j, k = np.meshgrid(np.arange(self.Ny, dtype=np.int), np.arange(self.Nz, dtype=np.int))
-        j = np.hstack(j)
-        k = np.hstack(k)
-        self.remove_connections_in_padj(i, j, k, [0, 1, 4, 5])
-
-    def remove_connections_between_pores_in_y_plane(self, j):
-        i, k = np.meshgrid(np.arange(self.Nx, dtype=np.int), np.arange(self.Nz, dtype=np.int))
-        i = np.hstack(i)
-        k = np.hstack(k)
-        self.remove_connections_in_padj(i, j, k, [0, 2, 3, 5])
-
-    def remove_connections_between_pores_in_z_plane(self, k):
-        i, j = np.meshgrid(np.arange(self.Nx, dtype=np.int), np.arange(self.Ny, dtype=np.int))
-        i = np.hstack(i)
-        j = np.hstack(j)
-        self.remove_connections_in_padj(i, j, k, [1, 2, 3, 4])
-
     def remove_connections_in_padj(self, i, j, k, indices_2):
         ind = np.array(self.ijk_to_ind(i, j, k), dtype=np.int)
         for ind2 in indices_2:
