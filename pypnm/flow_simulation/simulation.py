@@ -22,7 +22,7 @@ class Simulation(object):
     def __init__(self, network):
         self.network = network
 
-        self._relperm_comp = SimpleRelPermComputer(self.network)
+        self._relperm_comp = None
         self.pe_comp = EntryPressureComputer()
 
         self.vtk_writer = None
@@ -65,10 +65,12 @@ class Simulation(object):
         self._sat_comp_pp = self.SatComputer(self.network_pp)
 
     def get_relative_permeability(self):
+        self._relperm_comp = SimpleRelPermComputer(self.network)
         self._relperm_comp.compute()
         return self._relperm_comp.kr_n[0], self._relperm_comp.kr_w[0]
 
     def get_permeability(self):
+        self._relperm_comp = SimpleRelPermComputer(self.network)
         assert self._relperm_comp.K > 0.0
         return self._relperm_comp.K
 
