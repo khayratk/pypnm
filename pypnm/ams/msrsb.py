@@ -33,7 +33,7 @@ class MSRSB(object):
     """
     def __init__(self, A, my_restriction_supports, my_basis_supports):
 
-        if len(my_basis_supports) != len(my_restriction_supports):
+        if len(my_basis_supports) < len(my_restriction_supports):
             raise ValueError()
 
         self.A = A
