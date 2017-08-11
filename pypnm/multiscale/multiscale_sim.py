@@ -435,7 +435,7 @@ class MultiscaleSim(object):
         """
         assert solver_type in ["lu", "petsc", "AMG", "trilinos", "mltrilinos"]
         for i in self.my_subgraph_ids:
-            self.simulations[i].solver_type = solver_type
+            self.simulations[i].press_solver_type = solver_type
 
     def _sync_pc_and_sat(self):
         self.p_c = self._update_pc_from_subnetworks(self.p_c, self.my_subnetworks)
@@ -484,38 +484,38 @@ class MultiScaleSimUnstructured(MultiscaleSim):
 
         self.num_subnetworks = num_subnetworks
 
-        # Create graph corresponding to network, Another coarser graph with its vertices corresponding to subnetworks,
+        # Create graph corresponding to network and another coarser graph with its vertices corresponding to subnetworks
         if my_id == 0:
-            graph = network_to_igraph(network, edge_attributes=["l", "A_tot", "r", "G"])
+            self.graph = network_to_igraph(network, edge_attributes=["l", "A_tot", "r", "G"])
 
             # create global_id attributes before creating subgraphs.
-            graph.vs["global_id"] = np.arange(graph.vcount())
-            graph.es["global_id"] = np.arange(graph.ecount())
+            self.graph.vs["global_id"] = np.arange(self.graph.vcount())
+            self.graph.es["global_id"] = np.arange(self.graph.ecount())
 
             if subgraph_ids is None:
-                _, subgraph_ids = pymetis.part_graph(num_subnetworks, graph.get_adjlist())
+                _, subgraph_ids = pymetis.part_graph(num_subnetworks, self.graph.get_adjlist())
 
             subgraph_ids = np.asarray(subgraph_ids)
-            graph.vs["subgraph_id"] = subgraph_ids
+            self.graph.vs["subgraph_id"] = subgraph_ids
 
             # Assign a processor id to each subgraph
-            coarse_graph = coarse_graph_from_partition(graph, subgraph_ids)
+            coarse_graph = coarse_graph_from_partition(self.graph, subgraph_ids)
             _, proc_ids = pymetis.part_graph(self.num_proc, coarse_graph.get_adjlist())
             coarse_graph.vs['proc_id'] = proc_ids
             coarse_graph.vs["subgraph_id"] = np.arange(coarse_graph.vcount())
 
             # Assign a processor id to each pore
             subgraph_id_to_proc_id = {v["subgraph_id"]: v['proc_id'] for v in coarse_graph.vs}
-            graph.vs["proc_id"] = [subgraph_id_to_proc_id[v["subgraph_id"]] for v in graph.vs]
+            self.graph.vs["proc_id"] = [subgraph_id_to_proc_id[v["subgraph_id"]] for v in self.graph.vs]
 
         if my_id != 0:
             network = None
-            graph = None
+            self.graph = None
             coarse_graph = None
             subgraph_ids = None
 
         self.coarse_graph = self.mpicomm.bcast(coarse_graph, root=0)
-        self.graph = self.distribute_graph(graph, self.coarse_graph, self.mpicomm)
+        self.graph = self.distribute_graph(self.graph, self.coarse_graph, self.mpicomm)
 
         self.my_subnetworks = _create_subnetworks(network, subgraph_ids, self.coarse_graph, self.mpicomm)
 
@@ -538,25 +538,36 @@ class MultiScaleSimUnstructured(MultiscaleSim):
         # subnetworks belonging to this processor as well as those belonging to ghost subnetworks.
         # Only support vertex ids belonging to this processor are stored.
         self.my_basis_support = dict()
+        self.my_subgraph_support = dict()
 
         my_global_elements = self.unique_map.MyGlobalElements()
 
-        graph["global_to_local"] = dict((v["global_id"], v.index) for v in self.graph.vs)
-        graph["local_to_global"] = dict((v.index, v["global_id"]) for v in self.graph.vs)
 
+        self.graph["global_to_local"] = dict((v["global_id"], v.index) for v in self.graph.vs)
+        self.graph["local_to_global"] = dict((v.index, v["global_id"]) for v in self.graph.vs)
+
+        # support region for each subgraph
+        for i in self.my_subgraph_ids:
+            self.my_subgraph_support[i] = self.my_subnetworks[i].pi_local_to_global
+
+
+        # support region for each subgraph
+        self.my_subgraph_support_with_ghosts = dict()
         for i in self.my_subgraph_ids_with_ghost:
+            self.my_subgraph_support_with_ghosts[i] = np.asarray(self.graph.vs.select(subgraph_id=i)["global_id"])
+
+        for i in self.my_subgraph_ids:
+            assert np.all(np.sort(self.my_subgraph_support[i]) == np.sort(self.my_subgraph_support_with_ghosts[i]))
+
+        for i in self.my_subgraph_ids:
             if num_subnetworks == 1:
                 support_vertices = self.my_subnetworks[0].pi_local_to_global
             else:
                 support_vertices = support_of_basis_function(i, self.graph, self.coarse_graph,
-                                                             self.subgraph_id_to_v_center_id)
+                                                             self.subgraph_id_to_v_center_id, self.my_subgraph_support_with_ghosts)
 
             self.my_basis_support[i] = np.intersect1d(support_vertices, my_global_elements).astype(np.int32)
 
-        # support region for each subgraph
-        self.subgraph_support = dict()
-        for i in self.my_subgraph_ids:
-            self.subgraph_support[i] = self.my_subnetworks[i].pi_local_to_global
 
         # Create distributed arrays - Note: Memory wasted here by allocating extra arrays which include ghost cells.
         # This can be optimized but the python interface for PyTrilinos is not documented well enough.
@@ -724,8 +735,8 @@ class MultiScaleSimUnstructured(MultiscaleSim):
         Returns
         -------
         graph: igraph
-            graph consisting of the vertices of the subgraph which belong to the processor, the vertices of the
-             neighboring subgraphs, as well as the edges between these vertices.
+            graph consisting of the vertices of the subgraph which belong to the processor, the and vertices of the
+             neighboring subgraphs
         """
         my_id = mpicomm.rank
         num_proc = mpicomm.size
@@ -778,7 +789,7 @@ class MultiScaleSimUnstructured(MultiscaleSim):
         A = create_matrix(self.unique_map, ["k_n", "k_w"], self.my_subnetworks, self.inter_processor_edges,
                           self.inter_subgraph_edges)
 
-        self.ms = MSRSB(A, self.subgraph_support, self.my_basis_support)
+        self.ms = MSRSB(A, self.my_subgraph_support, self.my_basis_support)
         self.ms.smooth_prolongation_operator(10)
 
     def __solve_pressure(self, smooth_prolongator=True):
@@ -804,7 +815,6 @@ class MultiScaleSimUnstructured(MultiscaleSim):
         simulations = self.simulations
 
         self.stop_time = self.time + delta_t
-
         while True:
             sat_current = _network_saturation(self.my_subnetworks, self.mpicomm)
             print "Current Saturation of Complete Network", sat_current
@@ -877,24 +887,25 @@ class MultiScaleSimUnstructured(MultiscaleSim):
             self.inter_processor_edges = self._update_inter_conductances(self.inter_processor_edges, self.p_c_with_ghost)
             comm.Barrier()
 
-            self.p_n, self.p_w = self.__solve_pressure(smooth_prolongator=False)
+            for _ in xrange(2):
+                self.p_n, self.p_w = self.__solve_pressure(smooth_prolongator=False)
 
-            self.p_w_with_ghost.Import(self.p_w, epetra_importer, Epetra.Insert)
+                self.p_w_with_ghost.Import(self.p_w, epetra_importer, Epetra.Insert)
 
-            self.inter_subgraph_edges = update_inter_invasion_status_piston_wetting(self.inter_subgraph_edges,
-                                                                                    self.p_w_with_ghost,
-                                                                                    self.p_c_with_ghost,
-                                                                                    self.sat_with_ghost)
+                self.inter_subgraph_edges = update_inter_invasion_status_piston_wetting(self.inter_subgraph_edges,
+                                                                                        self.p_w_with_ghost,
+                                                                                        self.p_c_with_ghost,
+                                                                                        self.sat_with_ghost)
 
-            self.inter_processor_edges = update_inter_invasion_status_piston_wetting(self.inter_processor_edges,
-                                                                                     self.p_w_with_ghost,
-                                                                                     self.p_c_with_ghost,
-                                                                                     self.sat_with_ghost)
+                self.inter_processor_edges = update_inter_invasion_status_piston_wetting(self.inter_processor_edges,
+                                                                                         self.p_w_with_ghost,
+                                                                                         self.p_c_with_ghost,
+                                                                                         self.sat_with_ghost)
 
-            self.inter_subgraph_edges = self._update_inter_conductances(self.inter_subgraph_edges, self.p_c_with_ghost)
-            self.inter_processor_edges = self._update_inter_conductances(self.inter_processor_edges, self.p_c_with_ghost)
+                self.inter_subgraph_edges = self._update_inter_conductances(self.inter_subgraph_edges, self.p_c_with_ghost)
+                self.inter_processor_edges = self._update_inter_conductances(self.inter_processor_edges, self.p_c_with_ghost)
 
-            comm.Barrier()
+                comm.Barrier()
 
             self.p_n, self.p_w = self.__solve_pressure(smooth_prolongator=False)
 
@@ -948,7 +959,6 @@ class MultiScaleSimUnstructured(MultiscaleSim):
             for i in self.simulations:
                 dt_sim = self.simulations[i].advance_in_time(delta_t=dt)
                 dt_sim_min = min(dt_sim, dt_sim_min)
-
             comm.Barrier()
 
             dt_sim_min = self.mpicomm.allreduce(dt_sim_min, op=MPI.MIN)
