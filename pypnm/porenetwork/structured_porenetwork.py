@@ -10,7 +10,7 @@ from porenetwork import PoreNetwork
 import numpy as np
 
 path = os.path.dirname(os.path.abspath(__file__))
-# os.system('gcc -fPIC -shared -o ' + path + '/pn_lib.so ' + path + '/pn_lib.c')
+os.system('gcc -fPIC -shared -o ' + path + '/pn_lib.so ' + path + '/pn_lib.c')
 lib = ctypes.cdll.LoadLibrary(path + '/pn_lib.so')
 
 init_t_adj_c = lib.init_t_adj
