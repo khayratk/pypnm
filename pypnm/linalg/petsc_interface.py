@@ -12,8 +12,9 @@ except ImportError:
 
 
 def get_petsc_ksp(A, pctype="ilu", ksptype="gmres", tol=1e-5, max_it=10000):
+    comm = MPI.COMM_SELF
     petsc_mat = scipy_to_petsc_matrix(A)
-    ksp = PETSc.KSP().create()
+    ksp = PETSc.KSP().create(comm=comm)
     ksp.setOperators(petsc_mat)
     ksp.setType(ksptype)
     ksp.setTolerances(rtol=tol, max_it=max_it)
@@ -89,12 +90,13 @@ def petsc_solve(A, b, x0=None, tol=1e-5, ksptype="gmres"):
 def petsc_solve_from_ksp(ksp, rhs, x=None, tol=1e-5):
     ksp.setTolerances(rtol=tol)
 
-    petsc_rhs = PETSc.Vec().createWithArray(rhs)
+    comm = MPI.COMM_SELF  # Only works in serial
+    petsc_rhs = PETSc.Vec().createWithArray(rhs, comm=comm)
 
     if x is None:
         petsc_sol = petsc_rhs.duplicate()
     else:
-        petsc_sol = PETSc.Vec().createWithArray(x)
+        petsc_sol = PETSc.Vec().createWithArray(x, comm=comm)
 
     if not ksp.getType() == "preonly":
         ksp.setInitialGuessNonzero(True)
