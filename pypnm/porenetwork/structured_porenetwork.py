@@ -11,7 +11,13 @@ import numpy as np
 
 path = os.path.dirname(os.path.abspath(__file__))
 os.system('gcc -fPIC -shared -o ' + path + '/pn_lib.so ' + path + '/pn_lib.c')
-lib = ctypes.cdll.LoadLibrary(path + '/pn_lib.so')
+
+try:
+    lib = ctypes.cdll.LoadLibrary(path + '/pn_lib.so')
+except:
+    path = os.path.dirname(os.path.abspath(__file__))
+    os.system('gcc -fPIC -shared -o ' + path + '/pn_lib.so ' + path + '/pn_lib.c')
+    lib = ctypes.cdll.LoadLibrary(path + '/pn_lib.so')
 
 init_t_adj_c = lib.init_t_adj
 init_t_adj_c.restype = None
