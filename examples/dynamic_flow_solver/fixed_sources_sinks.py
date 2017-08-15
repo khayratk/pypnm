@@ -63,5 +63,6 @@ def dynamic_simulation():
             print("Break-through reached")
             break
 
-if  __name__=="__main__":
+
+if __name__ == "__main__":
     dynamic_simulation()
