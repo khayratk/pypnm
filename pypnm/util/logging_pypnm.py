@@ -17,6 +17,6 @@ formatter = logging.Formatter('%(filename)s:%(lineno)s - %(asctime)s - %(name)s 
 
 # create console handler
 ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
+ch.setLevel(logging.WARNING)
 ch.setFormatter(formatter)
 logger.addHandler(ch)
