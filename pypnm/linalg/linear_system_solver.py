@@ -331,7 +331,7 @@ class PressureSolverDynamicDirichlet(DynamicPressureSolverMethods):
         self.__set_matrix(k_n, k_w)
         self.set_rhs(k_n, p_c)
 
-    def solve(self, solver="lu", x0=None):
+    def solve(self, solver="lu", x0=None, tol=1.e-6):
         solver = solver.lower()
         sf = 1e30
         pores = self.network.pores
@@ -339,7 +339,6 @@ class PressureSolverDynamicDirichlet(DynamicPressureSolverMethods):
         self.solver_matrix.set_csr_singular_rows_to_dirichlet(A)
         self.A = A
 
-        tol = 1e-5
         mass_residual = 1.0
 
         if x0 is not None:
