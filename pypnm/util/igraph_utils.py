@@ -96,7 +96,7 @@ def scipy_matrix_to_igraph(matrix, directed=False):
     return ig.Graph(edges, directed=directed)
 
 
-def network_to_igraph(network, vertex_mask=None, edge_mask=None, edge_attributes = None, vertex_attributes = None):
+def network_to_igraph(network, vertex_mask=None, edge_mask=None, edge_attributes=None, vertex_attributes=None):
     """
     Parameters
     ----------
