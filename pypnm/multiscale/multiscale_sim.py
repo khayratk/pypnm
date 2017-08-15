@@ -94,6 +94,7 @@ def _create_subnetworks(network, subgraph_ids, coarse_graph, mpicomm):
                 if proc_ids[i] == dest_id:
                     pi_list = indices_of_subgraph[i]
                     send_dict[i] = SubNetwork(network, pi_list)
+                    assert len(network_to_igraph(send_dict[i]).components()) == 1
 
             if dest_id == 0:
                 my_subnetworks = send_dict
