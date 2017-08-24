@@ -6,7 +6,7 @@ import numpy as np
 import pymetis
 from PyTrilinos import Epetra
 from mpi4py import MPI
-
+import logging
 from pypnm.ams.msfv import MSFV
 from pypnm.ams.msrsb import MSRSB
 from pypnm.ams.wire_basket import create_wire_basket
@@ -26,6 +26,7 @@ from pypnm.util.igraph_utils import coarse_graph_from_partition, graph_central_v
     network_to_igraph
 from pypnm.util.indexing import GridIndexer3D
 from sim_settings import sim_settings
+import cPickle as pickle
 
 
 def require_path(path):
@@ -34,6 +35,8 @@ def require_path(path):
     except OSError as exception:
         if exception.errno != errno.EEXIST:
             raise
+
+logger = logging.getLogger('pypnm')
 
 
 def reduce_dictionary_values(key_to_scalar_distributed, mpicomm):
@@ -197,10 +200,25 @@ def _output_subnetworks_to_hdf(subnetworks, label, time, folder_name, mpicomm):
         add_field_to_hdf_file(filename, label, "p_c", subnetworks[i].pores.p_c)
         add_field_to_hdf_file(filename, label, "p_n", subnetworks[i].pores.p_n)
         add_field_to_hdf_file(filename, label, "p_w", subnetworks[i].pores.p_w)
-        add_field_to_hdf_file(filename, label, "volume", subnetworks[i].pores.vol)
+        add_field_to_hdf_file(filename, label, "tube_invaded", subnetworks[i].tubes.invaded)
+
+        add_field_to_hdf_file(filename, 0, "tube_r", subnetworks[i].tubes.r)
+        add_field_to_hdf_file(filename, 0, "tube_l", subnetworks[i].tubes.l)
+        add_field_to_hdf_file(filename, 0, "tube_A_tot", subnetworks[i].tubes.A_tot)
+
+        add_field_to_hdf_file(filename, 0, "volume", subnetworks[i].pores.vol)
+        add_field_to_hdf_file(filename, 0, "G", subnetworks[i].pores.G)
+        add_field_to_hdf_file(filename, 0, "r", subnetworks[i].pores.r)
         add_field_to_hdf_file(filename, 0, "x", subnetworks[i].pores.x)
         add_field_to_hdf_file(filename, 0, "y", subnetworks[i].pores.y)
         add_field_to_hdf_file(filename, 0, "z", subnetworks[i].pores.z)
+
+
+def _export_subnetwork_structure(subnetworks, folder_name):
+    require_path(folder_name)
+    for i in subnetworks:
+        filename = folder_name + "/hdf_subnet_structure" + str(i).zfill(4) + ".h5"
+        subnetworks[i].export_to_hdf(filename)
 
 
 def _output_subnetworks_to_vtk(subnetworks, label, folder_name):
@@ -210,11 +228,98 @@ def _output_subnetworks_to_vtk(subnetworks, label, folder_name):
 
 
 class MultiscaleSim(object):
+    def save(self, filename="multiscale_sim"):
+        del self.unique_map
+        del self.nonunique_map
+        del self.subgraph_ids_vec
+        del self.epetra_importer
+
+        del self.p_c
+        del self.sat
+        del self.p_w
+
+        try:
+            del self.p_n
+        except:
+            pass
+
+        del self.out_flux_w
+        del self.out_flux_n
+        del self.p_c_with_ghost
+        del self.sat_with_ghost
+        del self.p_w_with_ghost
+        del self.out_flux_n_with_ghost
+
+        del self.ms
+
+        del self.global_source_wett
+        del self.global_source_nonwett
+        del self.global_source_nonwett_with_ghost
+
+        del self.comm
+
+        comm = Epetra.PyComm()
+        output_file = open(filename+"_proc"+str(comm.MyPID()), 'wb')
+        pickle.dump(self, output_file, protocol=pickle.HIGHEST_PROTOCOL)
+        output_file.close()
+
+    @classmethod
+    def load(cls, filename="multiscale_sim"):
+        """
+        loads simulation from a pkl file
+
+        Parameters
+        ----------
+        filename: str
+
+        """
+        comm = Epetra.PyComm()
+        input_file = open(filename+"_proc"+str(comm.MyPID()), 'rb')
+        ms = pickle.load(input_file)
+        ms.comm = Epetra.PyComm()
+        ms.mpicomm = MPI.COMM_WORLD
+
+        ms.unique_map, ms.nonunique_map, ms.subgraph_ids_vec = ms.create_maps(ms.graph, ms.comm)
+        ms.epetra_importer = Epetra.Import(ms.nonunique_map, ms.unique_map)
+
+        unique_map = ms.unique_map
+        nonunique_map = ms.nonunique_map
+
+        ms.p_c = Epetra.Vector(unique_map)
+        ms.p_w = Epetra.Vector(unique_map)
+        ms.sat = Epetra.Vector(unique_map)
+        ms.global_source_wett = Epetra.Vector(unique_map)
+        ms.global_source_nonwett = Epetra.Vector(unique_map)
+        ms.out_flux_w = Epetra.Vector(unique_map)
+        ms.out_flux_n = Epetra.Vector(unique_map)
+
+        ms.p_c_with_ghost = Epetra.Vector(nonunique_map)
+        ms.p_w_with_ghost = Epetra.Vector(nonunique_map)
+        ms.sat_with_ghost = Epetra.Vector(nonunique_map)
+        ms.global_source_nonwett_with_ghost = Epetra.Vector(nonunique_map)
+        ms.out_flux_n_with_ghost = Epetra.Vector(nonunique_map)
+        ms.p_c = MultiScaleSimUnstructured._update_pc_from_subnetworks(ms.p_c, ms.my_subnetworks)
+        ierr = ms.p_c_with_ghost.Import(ms.p_c, ms.epetra_importer, Epetra.Insert)
+        assert ierr == 0
+
+        ms.sat = ms._update_sat_from_subnetworks(ms.sat, ms.my_subnetworks)
+        ierr = ms.sat_with_ghost.Import(ms.sat, ms.epetra_importer, Epetra.Insert)
+
+        A = create_matrix(ms.unique_map, ["k_n", "k_w"], ms.my_subnetworks, ms.inter_processor_edges,
+                          ms.inter_subgraph_edges)
+
+        ms.ms = MSRSB(A, ms.my_subgraph_support, ms.my_basis_support)
+        ms.ms.smooth_prolongation_operator(10)
+
+        assert ierr == 0
+
+        return ms
+
     def _bc_const_source_face(self, wett_source, nwett_source, FACE):
         my_id = self.comm.MyPID()
         mpicomm = self.mpicomm
         if my_id == 0:
-            pi_list_wetting_source_global = self.network.pi_list_face[FACE].astype(np.int32) # TODO: Separate
+            pi_list_wetting_source_global = self.network.pi_list_face[FACE].astype(np.int32)  # TODO: Separate
             pi_list_nonwetting_source_global = self.network.pi_list_face[FACE].astype(np.int32)
 
         if my_id != 0:
@@ -602,7 +707,7 @@ class MultiScaleSimUnstructured(MultiscaleSim):
             pc_comp.compute()
 
         self.delta_s_max = 0.01
-        self.p_tol = 1.e-5
+        self.p_tol = 1.e-6
         self.time = 0.0
         self.stop_time = None
 
@@ -818,8 +923,8 @@ class MultiScaleSimUnstructured(MultiscaleSim):
         self.stop_time = self.time + delta_t
         while True:
             sat_current = _network_saturation(self.my_subnetworks, self.mpicomm)
-            print "Current Saturation of Complete Network", sat_current
-            print "Current Time", self.time
+            logger.info("Current Saturation of Complete Network: %g", sat_current)
+            logger.info("Current Time: %g", self.time)
 
             # Update global capillary pressure and saturation vectors from vectors contained in subnetworks
             self.p_c, self.sat = self._sync_pc_and_sat()
@@ -956,7 +1061,8 @@ class MultiScaleSimUnstructured(MultiscaleSim):
 
             dt_sim_min = 1.0e20
 
-            print "advancing simulations with timestep", dt
+            logger.info("advancing simulations with timestep %g", dt)
+
             for i in self.simulations:
                 dt_sim = self.simulations[i].advance_in_time(delta_t=dt)
                 dt_sim_min = min(dt_sim, dt_sim_min)
@@ -967,10 +1073,10 @@ class MultiScaleSimUnstructured(MultiscaleSim):
 
             backtracking = not np.isclose(dt_sim_min, dt)
             if backtracking:
-                print "Back Tracking because simulation was stuck at time-step ", dt_sim_min
+                logger.warn("Back Tracking because simulation was stuck at time-step %g", dt_sim_min)
 
                 dt_sim_min *= 0.95
-                print "advancing backtracked simulations with time-step", dt_sim_min
+                logger.warn("advancing backtracked simulations with time-step %g", dt_sim_min)
                 for i in simulations:
                     simulations[i].reset_status()
 
@@ -978,16 +1084,16 @@ class MultiScaleSimUnstructured(MultiscaleSim):
                     continue
 
                 for i in simulations:
-                    # print "SIMULATION", i
+                    logger.debug("Simulation %d", i)
                     dt_sim = simulations[i].advance_in_time(delta_t=dt_sim_min)
-                    # print dt_sim, dt_sim_min
+                    logger.debug("Time step: %d, target time step: %d", dt_sim, dt_sim_min)
                     assert np.isclose(dt_sim, dt_sim_min), str(dt_sim) + "  " + str(dt_sim_min)
 
             self.comm.Barrier()
             self.time += dt_sim_min
 
-            print "time is ", self.time
-            print "stop time is", self.stop_time
+            logger.info("time is %g", self.time)
+            logger.info("stop time is %g", self.stop_time)
 
             if np.isclose(self.time, self.stop_time):
                 break
@@ -1098,7 +1204,7 @@ class MultiScaleSimStructured(MultiscaleSim):
         rhs[self.pi_list_press_inlet] = self.press_inlet_w
         rhs[self.pi_list_press_outlet] = self.press_outlet_w
 
-        print "Solving using MSFV method"
+        logger.info("Solving using MSFV method")
 
         self.msfv.set_matrix(A)
         self.msfv.set_source_term(rhs)
