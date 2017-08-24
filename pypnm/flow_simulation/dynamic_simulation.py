@@ -267,6 +267,7 @@ class DynamicSimulation(Simulation):
                 source_max = np.max(np.abs(self.rhs_source_nonwett)) + np.max(np.abs(self.rhs_source_wett))
                 assert np.abs(total_flux) <= source_max/1.e6, "total flux is %e. Maximum source is %e" % (total_flux, source_max)
 
+
         network = self.network
         if FLUID == WETT:
             pi_list_sink = self.bc.pi_list_w_sink
@@ -274,10 +275,9 @@ class DynamicSimulation(Simulation):
 
             # TODO: Above a certain threshold block a wetting sink using self.rhs_source_wett[pi] = 0.0
             for pi in pi_list_sink:
-                # pi_nghs_interior = np.setdiff1d(self.network.ngh_pores[pi], pi_list_sink, assume_unique=False) # TODO: Slow
-                # if len(pi_nghs_interior) == 0:
-                #    pi_nghs_interior = self.network.ngh_pores[pi]
-                pi_nghs_interior = self.network.ngh_pores[pi]
+                pi_nghs_interior = np.setdiff1d(self.network.ngh_pores[pi], pi_list_sink, assume_unique=False)
+                if len(pi_nghs_interior) == 0:
+                   pi_nghs_interior = self.network.ngh_pores[pi]
                 pc_max_ngh = np.max(self.network.pores.p_c[pi_nghs_interior])
 
                 sat_pi = self.network.pores.sat[pi]
@@ -648,7 +648,7 @@ class DynamicSimulation(Simulation):
             logger.debug("="*80)
             logger.debug("")
 
-            if dt_ratio < 1e-8:
+            if dt_ratio < 1e-4 and counter > 1000:
                 logger.warning("Exiting solver because time step too slow.")
                 break
 
