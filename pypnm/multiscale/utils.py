@@ -66,7 +66,7 @@ def update_inter_invasion_status_snap_off(inter_edges, p_c):
         cond1 = (inter_pc_edge[eid] < snap_off_press[eid])
         cond2 = (inter_edges["invaded"][eid] == 1)
         if cond1 and cond2:
-            #print "Inter subgraph snap-off at global edge id %d"%inter_edges["global_id"][eid]
+            print "Inter subgraph snap-off at global edge id %d"%inter_edges["global_id"][eid]
             inter_edges["invaded"][eid] = 0
     return inter_edges
 
@@ -93,7 +93,7 @@ def update_inter_invasion_status_piston(inter_edges, p_w, p_c, sat, outflux_n, s
 
     for eid in xrange(len(condition)):
         if condition[eid]:
-             # print "Inter subgraph nonwetting piston displacement at global edge id %d"%inter_edges["global_id"][eid]
+            print "Inter subgraph nonwetting piston displacement at global edge id %d"%inter_edges["global_id"][eid]
             inter_edges["invaded"][eid] = 1
 
     return inter_edges
@@ -104,7 +104,7 @@ def update_inter_invasion_status_piston_wetting(inter_edges, p_w, p_c, sat):
     inter_edgelist_local_1 = np.asarray([p_c.Map().LID(i) for i in inter_edges['edgelist'][0]], dtype=np.int32)
     inter_edgelist_local_2 = np.asarray([p_c.Map().LID(i) for i in inter_edges['edgelist'][1]], dtype=np.int32)
 
-    sat_crit = 0.001
+    sat_crit = 0.001  # Important. This has to be the same as the sat_crit in dynamic simulator
     sat_below_crit_1 = (sat[inter_edgelist_local_1] < sat_crit)
     sat_below_crit_2 = (sat[inter_edgelist_local_2] < sat_crit)
 
@@ -116,14 +116,14 @@ def update_inter_invasion_status_piston_wetting(inter_edges, p_w, p_c, sat):
 
     for eid in xrange(len(condition)):
         if condition[eid]:
-            # print "Inter subgraph wetting piston displacement at global edge id %d"%inter_edges["global_id"][eid]
+            print "Inter subgraph wetting piston displacement at global edge id %d"%inter_edges["global_id"][eid]
             inter_edges["invaded"][eid] = 0
 
     return inter_edges
 
 
 def create_matrix(unique_map, edge_attributes, subnetworks=None, inter_processor_edges=None, inter_subgraph_edges=None, matformat="trilinos"):
-    A = Epetra.CrsMatrix(Epetra.Copy, unique_map, 20)
+    A = Epetra.CrsMatrix(Epetra.Copy, unique_map, 30)
     my_global_elements_set = set(unique_map.MyGlobalElements())
 
     row_lists = []
@@ -182,7 +182,7 @@ def create_matrix(unique_map, edge_attributes, subnetworks=None, inter_processor
     if matformat == "trilinos":
         for row, col, val in izip(row_lists, col_lists, val_lists):
             ierr = A.InsertGlobalValues(row, col, val)
-            assert ierr == 0
+            assert ierr == 0, ierr
 
         A.FillComplete()
 
