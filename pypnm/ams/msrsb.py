@@ -1,9 +1,11 @@
+import logging
+
 import numpy as np
 from PyTrilinos import Epetra, EpetraExt, IFPACK
 
 from pypnm.linalg.trilinos_interface import DinvA, sum_of_columns, mat_multiply, solve_direct
 from pypnm.linalg.trilinos_interface import epetra_set_matrow_to_zero, epetra_set_vecrow_to_zero
-import logging
+
 logger = logging.getLogger('pypnm.msrsb')
 
 
@@ -265,3 +267,5 @@ class MSRSB(object):
         x0[:] += error[:]
 
         return x0
+
+
