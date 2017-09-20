@@ -1,7 +1,7 @@
 import numpy as np
 from PyTrilinos import Epetra, AztecOO, ML, EpetraExt, Amesos
 from mpi4py import MPI
-
+from scipy.sparse import coo_matrix
 
 def epetra_set_matrow_to_zero(A, row):
     if row in A.Map().MyGlobalElements():
@@ -112,6 +112,19 @@ def matrix_scipy_to_epetra(A_scipy, A_epetra=None):
     assert ierr == 0
     return A_epetra
 
+
+def matrix_epetra_to_scipy(A_epetra):
+    values = [A_epetra.ExtractGlobalRowCopy(i)[0] for i in xrange(A_epetra.NumGlobalRows())]
+    columns = [A_epetra.ExtractGlobalRowCopy(i)[1] for i in xrange(A_epetra.NumGlobalRows())]
+    rows = [i * np.ones(len(vals)) for i, vals in enumerate(values)]
+    values = np.hstack(values)
+    columns = np.hstack(columns).astype(np.int)
+    rows = np.hstack(rows).astype(np.int)
+    assert len(rows) == len(columns) == len(values)
+
+    solve_pressure_trilinos_from_scipy
+
+    return coo_matrix((values, (rows, columns)))
 
 def vector_numpy_to_epetra(v):
     """
