@@ -239,15 +239,17 @@ class MSRSB(object):
         ilu.Compute()
 
         residual_prev_norm = 1.e50
-        n_ilu_iter = 5
+        n_ilu_iter = 20
 
         for iteration in xrange(max_iter):
-            for __ in xrange(max(n_ilu_iter, 100)):
+            for __ in xrange(n_ilu_iter):
                 residual = self.__compute_residual(rhs, x0, residual)
                 ilu.ApplyInverse(residual, error)
                 x0[:] += error[:]
 
             residual = self.__compute_residual(rhs, x0, residual)
+            logger.debug("Residual at iteration %d: %f", iteration,  residual.NormInf()[0] / ref_residual_norm)
+
             error = self.solve_one_step_msfe(residual)
 
             if residual.NormInf() / ref_residual_norm < tol:
