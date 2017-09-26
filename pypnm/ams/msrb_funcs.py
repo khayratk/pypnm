@@ -8,7 +8,7 @@ from pypnm.multiscale.multiscale_sim import MultiScaleSimUnstructured
 from pypnm.util.igraph_utils import scipy_matrix_to_igraph, coarse_graph_from_partition, support_of_basis_function
 
 
-def solve_multiscale(ms, A, b, tol=1e-10):
+def solve_multiscale(ms, A, b, tol=1e-5):
     ms.A = A
     ms.smooth_prolongation_operator(100)
     sol = Epetra.Vector(A.RangeMap())
@@ -16,7 +16,7 @@ def solve_multiscale(ms, A, b, tol=1e-10):
     return sol
 
 
-def solve_with_msrsb(ia, ja, a, rhs):
+def solve_with_msrsb(ia, ja, a, rhs, tol=1e-3, v_per_subdomain=1000):
     comm = Epetra.PyComm()
     num_proc = comm.NumProc()
 
@@ -25,14 +25,15 @@ def solve_with_msrsb(ia, ja, a, rhs):
 
     A = matrix_scipy_to_epetra(A_scipy)
 
-    num_subnetworks = A_scipy.get_shape()[0] / 10000
+    num_subdomains = A_scipy.get_shape()[0] / v_per_subdomain
 
-    print "num of subgraphs created", num_subnetworks
+    print "num of subdomains created", num_subdomains
+
     # create global_id attributes before creating subgraphs.
     graph.vs["global_id"] = np.arange(graph.vcount())
     graph.es["global_id"] = np.arange(graph.ecount())
 
-    _, subgraph_ids_each_vertex = pymetis.part_graph(num_subnetworks, graph.get_adjlist())
+    _, subgraph_ids_each_vertex = pymetis.part_graph(num_subdomains, graph.get_adjlist())
 
     subgraph_ids_each_vertex = np.asarray(subgraph_ids_each_vertex)
     graph.vs["subgraph_id"] = subgraph_ids_each_vertex
@@ -73,9 +74,10 @@ def solve_with_msrsb(ia, ja, a, rhs):
         my_restriction_supports[i] = graph.vs.select(vs_subgraph)["global_id"]
 
     for i in subgraph_ids:
-        support_vertices = support_of_basis_function(i, graph, coarse_graph, subgraph_id_to_v_center_id, my_restriction_supports)
+        support_vertices = support_of_basis_function(i, graph, coarse_graph, subgraph_id_to_v_center_id,
+                                                     my_restriction_supports)
 
         my_basis_support[i] = np.intersect1d(support_vertices, my_global_elements).astype(np.int32)
 
     ms = MSRSB(A, my_restriction_supports, my_basis_support)
-    return np.asarray(solve_multiscale(ms, A, vector_numpy_to_epetra(rhs), tol=1.0e-10))
+    return np.asarray(solve_multiscale(ms, A, vector_numpy_to_epetra(rhs), tol=tol)), ms
