@@ -185,9 +185,9 @@ class DynamicSimulation(Simulation):
 
         if self.bc.no_dirichlet:
             pi_dirichlet = ((self.rhs_source_nonwett + self.rhs_source_wett) == 0.0).nonzero()[0][0]
-            press_solver.set_dirichlet_pores(pi_list=pi_dirichlet, value=0.0)
+            press_solver.set_dirichlet_pores(pi_list=[pi_dirichlet], value=0.0)
 
-        logger.debug("Fixing boundary conditions")
+        logger.debug("Solving Pressure")
         self.network.pores.p_w[:] = press_solver.solve(self.press_solver_type)
 
         self.network.pores.p_n[:] = self.network.pores.p_w + self.network.pores.p_c
@@ -591,8 +591,6 @@ class DynamicSimulation(Simulation):
         network.pores.invaded[self.bc.pi_list_nw_source] = NWETT
 
         #  Notes: During loop, self.q_n_tot and self.q_w_tot are NOT modified. But self.rhs_source_* are updated
-
-        logger.debug(self.bc)
         counter = 0
         time_init = self.time
         while True:

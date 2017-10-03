@@ -4,7 +4,7 @@ from scipy.sparse import csr_matrix
 import numpy as np
 from pypnm.ams.msrsb import MSRSB
 from pypnm.linalg.trilinos_interface import matrix_scipy_to_epetra, vector_numpy_to_epetra
-from pypnm.multiscale.multiscale_sim import MultiScaleSimUnstructured
+from pypnm.multiscale.multiscale_unstructured import MultiScaleSimUnstructured
 from pypnm.util.igraph_utils import scipy_matrix_to_igraph, coarse_graph_from_partition, support_of_basis_function
 
 

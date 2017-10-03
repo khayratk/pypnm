@@ -202,7 +202,7 @@ class DynamicSaturationComputer(QuasiStaticSaturationComputer):
         mask_pc_diff_criteria = (pores.sat > 0.8) & mask_imbibition
 
         if np.any(mask_pc_diff_criteria):
-            # Criterion: capillary pressure is decreased by 5 percent
+            # Criterion: capillary pressure is decreased by delta_pc
             sat_min_pc_diff_criteria = np.minimum(
                 self.model.pc_to_sat_func(r=pores.r[mask_pc_diff_criteria],
                                           p_c=pores.p_c[mask_pc_diff_criteria]*(1-delta_pc),

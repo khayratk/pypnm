@@ -53,10 +53,10 @@ def dynamic_simulation():
 
     for n in xrange(100):
         print ("TimeStep: %g" % delta_t_output)
-        dt_sim = simulation.advance_in_time(delta_t=delta_t_output)
+        simulation.advance_in_time(delta_t=delta_t_output)
 
         simulation.write_vtk_output(label=n)
-        simulation.write_to_hdf(label=n, folder_name="paraview_dyn_run")
+        simulation.write_to_hdf(label=n, folder_name="hdf")
         print "Nonwetting saturation:", simulation.nonwetting_saturation()
 
         if np.any(network.pores.invaded[pi_outlet]==1):

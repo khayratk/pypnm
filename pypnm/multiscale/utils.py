@@ -5,9 +5,12 @@ import pandas as pd
 from PyTrilinos import Epetra, EpetraExt
 from scipy.sparse import coo_matrix, diags
 
-from pypnm.linalg.trilinos_interface import solve_aztec, sum_of_columns
+from pypnm.linalg.trilinos_interface import sum_of_columns
 from pypnm.porenetwork.pore_element_models import JNModel
 from pypnm.flow_simulation.simulation_bc import SimulationBoundaryCondition
+import logging
+
+logger = logging.getLogger('pypnm')
 
 
 def create_inter_processor_edgelist(graph, my_subgraph_ids, my_id):
@@ -54,8 +57,8 @@ def create_inter_processor_edgelist(graph, my_subgraph_ids, my_id):
 def update_inter_invasion_status_snap_off(inter_edges, p_c):
     inter_edgelist_local_1 = np.asarray([p_c.Map().LID(i) for i in inter_edges['edgelist'][0]], dtype=np.int32)
     inter_edgelist_local_2 = np.asarray([p_c.Map().LID(i) for i in inter_edges['edgelist'][1]], dtype=np.int32)
-    assert np.all(inter_edgelist_local_1>=0)
-    assert np.all(inter_edgelist_local_2>=0)
+    assert np.all(inter_edgelist_local_1 >= 0)
+    assert np.all(inter_edgelist_local_2 >= 0)
 
     inter_pc_edge = np.maximum(p_c[inter_edgelist_local_1], p_c[inter_edgelist_local_2])
 
@@ -66,8 +69,9 @@ def update_inter_invasion_status_snap_off(inter_edges, p_c):
         cond1 = (inter_pc_edge[eid] < snap_off_press[eid])
         cond2 = (inter_edges["invaded"][eid] == 1)
         if cond1 and cond2:
-            print "Inter subgraph snap-off at global edge id %d"%inter_edges["global_id"][eid]
+            logger.debug("Inter subgraph snap-off at global edge id %d", inter_edges["global_id"][eid])
             inter_edges["invaded"][eid] = 0
+
     return inter_edges
 
 
@@ -93,7 +97,7 @@ def update_inter_invasion_status_piston(inter_edges, p_w, p_c, sat, outflux_n, s
 
     for eid in xrange(len(condition)):
         if condition[eid]:
-            print "Inter subgraph nonwetting piston displacement at global edge id %d"%inter_edges["global_id"][eid]
+            logger.debug("Inter subgraph nonwetting piston displacement at global edge id %d", inter_edges["global_id"][eid])
             inter_edges["invaded"][eid] = 1
 
     return inter_edges
@@ -116,7 +120,7 @@ def update_inter_invasion_status_piston_wetting(inter_edges, p_w, p_c, sat):
 
     for eid in xrange(len(condition)):
         if condition[eid]:
-            print "Inter subgraph wetting piston displacement at global edge id %d"%inter_edges["global_id"][eid]
+            logger.debug("Inter subgraph wetting piston displacement at global edge id %d", inter_edges["global_id"][eid])
             inter_edges["invaded"][eid] = 0
 
     return inter_edges
@@ -187,20 +191,24 @@ def create_matrix(unique_map, edge_attributes, subnetworks=None, inter_processor
         A.FillComplete()
 
         ones = Epetra.Vector(unique_map)
-        ones.PutScalar(1.0)
+        ones[:] = 1.0
 
         x = Epetra.Vector(unique_map)
         A.Multiply(False, ones, x)
 
-        D = Epetra.CrsMatrix(Epetra.Copy, unique_map, 1)
-        row_inds = D.Map().MyGlobalElements()
-        D.InsertGlobalValues(row_inds, row_inds, x)
+        D = Epetra.CrsMatrix(Epetra.Copy, unique_map, 40)
 
-        EpetraExt.Add(A, False, -1.0, D, 1.0)
+        row_inds = D.Map().MyGlobalElements()
+        ierr = D.InsertGlobalValues(row_inds, row_inds, x)
+        assert ierr == 0, ierr
+
+        ierr = EpetraExt.Add(A, False, -1.0, D, 1.0)
+        assert ierr == 0, ierr
+
         D.FillComplete()
         check = sum_of_columns(D)
         if check:
-            error = np.max(np.abs(check))
+            error = np.max(np.abs(check[:]))
             assert error < 1.e-14, error
 
         return D
@@ -339,7 +347,9 @@ def create_rhs(unique_map, my_subnetworks, inter_processor_edges, inter_subgraph
     source_capillary = Epetra.Vector(unique_map)
     ierr = A_nw.Multiply(False, p_c, source_capillary)
     assert ierr == 0
-    b = (global_source_wett + global_source_nonwett) - source_capillary
+    b = Epetra.Vector(unique_map)
+
+    b[:] = (global_source_wett[:] + global_source_nonwett[:]) - source_capillary[:]
 
     if vecformat == "trilinos":
         return b
@@ -350,7 +360,7 @@ def create_rhs(unique_map, my_subnetworks, inter_processor_edges, inter_subgraph
 def solve_multiscale(ms, A, b, p_c, p_w=None, smooth_prolongator=True, tol=1.0e-5):
     ms.A = A
     if smooth_prolongator:
-        ms.smooth_prolongation_operator(10)
+        ms.smooth_prolongation_operator(niter=10)
     if p_w is None:
         p_w = Epetra.Vector(A.RangeMap())
     p_w = ms.iterative_solve(b, p_w, tol=tol)

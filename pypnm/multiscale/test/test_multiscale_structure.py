@@ -1,7 +1,7 @@
 import cProfile
 import pstats
 
-from pypnm.multiscale.multiscale_sim import MultiScaleSimStructured
+from pypnm.multiscale.multiscale_structured import MultiScaleSimStructured
 from pypnm.porenetwork.network_factory import structured_network
 from pypnm.porenetwork.constants import EAST, WEST
 from pypnm.porenetwork.network_manipulation import remove_tubes_between_face_pores

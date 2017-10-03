@@ -6,7 +6,7 @@ The simulation stops when breakthrough occurs.
 
 from pypnm.porenetwork.constants import WEST, EAST
 from pypnm.porenetwork.network_factory import unstructured_network_delaunay
-from pypnm.multiscale.multiscale_sim import MultiScaleSimUnstructured
+from pypnm.multiscale.multiscale_unstructured import MultiScaleSimUnstructured
 from pypnm.porenetwork.network_manipulation import remove_tubes_between_face_pores
 from PyTrilinos import Epetra
 from mpi4py import MPI

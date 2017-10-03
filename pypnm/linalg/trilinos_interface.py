@@ -103,7 +103,7 @@ def matrix_scipy_to_epetra(A_scipy, A_epetra=None):
     B = A_scipy.tocoo()
 
     if A_epetra is None:
-        A_epetra = Epetra.CrsMatrix(Epetra.Copy, map, A_scipy.getnnz(axis=1), True)
+        A_epetra = Epetra.CrsMatrix(Epetra.Copy, map, A_scipy.getnnz(axis=1).astype(np.int32), True)
         A_epetra.InsertGlobalValues(B.row, B.col, B.data)
         ierr = A_epetra.FillComplete()
     else:

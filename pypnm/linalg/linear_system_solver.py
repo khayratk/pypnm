@@ -319,8 +319,9 @@ class PressureSolverDynamicDirichlet(DynamicPressureSolverMethods):
         self.solver_matrix.fill_csr_matrix_with_edge_weights(self.csr_solver_matrix, k_n + k_w)
 
     def set_dirichlet_pores(self, pi_list, value):
-        self.solver_matrix.set_csr_matrix_rows_to_dirichlet(self.csr_solver_matrix, pi_list)
-        self.rhs[pi_list] = value
+        if len(pi_list) > 0:
+            self.solver_matrix.set_csr_matrix_rows_to_dirichlet(self.csr_solver_matrix, pi_list)
+            self.rhs[pi_list] = value
 
     def set_rhs(self, k_n, p_c):
         self.laplacian.fill_csr_matrix_with_edge_weights(self.csr_matrix, k_n)
