@@ -9,8 +9,14 @@ from scipy.sparse.linalg import spsolve
 
 from pypnm.linalg.laplacianmatrix import laplacian_from_network, LaplacianMatrix
 from pypnm.linalg.petsc_interface import get_petsc_ksp, petsc_solve_from_ksp, petsc_solve
-from pypnm.linalg.trilinos_interface import matrix_scipy_to_epetra, vector_numpy_to_epetra, trilinos_ml_prec
-from pypnm.linalg.trilinos_interface import trilinos_solve, solve_aztec
+
+try:
+    from pypnm.linalg.trilinos_interface import matrix_scipy_to_epetra, vector_numpy_to_epetra, trilinos_ml_prec
+    from pypnm.linalg.trilinos_interface import trilinos_solve, solve_aztec
+    WITH_TRILINOS = True
+except ImportError:
+    WITH_TRILINOS = False
+
 
 try:
     import petsc4py
