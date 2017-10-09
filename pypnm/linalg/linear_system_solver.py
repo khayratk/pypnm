@@ -9,8 +9,14 @@ from scipy.sparse.linalg import spsolve
 
 from pypnm.linalg.laplacianmatrix import laplacian_from_network, LaplacianMatrix
 from pypnm.linalg.petsc_interface import get_petsc_ksp, petsc_solve_from_ksp, petsc_solve
-from pypnm.linalg.trilinos_interface import matrix_scipy_to_epetra, vector_numpy_to_epetra, trilinos_ml_prec
-from pypnm.linalg.trilinos_interface import trilinos_solve, solve_aztec
+
+try:
+    from pypnm.linalg.trilinos_interface import matrix_scipy_to_epetra, vector_numpy_to_epetra, trilinos_ml_prec
+    from pypnm.linalg.trilinos_interface import trilinos_solve, solve_aztec
+    WITH_TRILINOS = True
+except ImportError:
+    WITH_TRILINOS = False
+
 
 try:
     import petsc4py
@@ -319,8 +325,9 @@ class PressureSolverDynamicDirichlet(DynamicPressureSolverMethods):
         self.solver_matrix.fill_csr_matrix_with_edge_weights(self.csr_solver_matrix, k_n + k_w)
 
     def set_dirichlet_pores(self, pi_list, value):
-        self.solver_matrix.set_csr_matrix_rows_to_dirichlet(self.csr_solver_matrix, pi_list)
-        self.rhs[pi_list] = value
+        if len(pi_list) > 0:
+            self.solver_matrix.set_csr_matrix_rows_to_dirichlet(self.csr_solver_matrix, pi_list)
+            self.rhs[pi_list] = value
 
     def set_rhs(self, k_n, p_c):
         self.laplacian.fill_csr_matrix_with_edge_weights(self.csr_matrix, k_n)

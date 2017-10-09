@@ -1,9 +1,11 @@
+import logging
+
 import numpy as np
-from PyTrilinos import Epetra, EpetraExt, IFPACK
+from PyTrilinos import Epetra, EpetraExt, IFPACK, AztecOO
 
 from pypnm.linalg.trilinos_interface import DinvA, sum_of_columns, mat_multiply, solve_direct
 from pypnm.linalg.trilinos_interface import epetra_set_matrow_to_zero, epetra_set_vecrow_to_zero
-import logging
+
 logger = logging.getLogger('pypnm.msrsb')
 
 
@@ -47,6 +49,8 @@ class MSRSB(object):
         self.delta_P.PutScalar(0.0)
 
         self.num_overlaps = sum_of_columns(self.N)
+
+        self.initial_norm = mat_multiply(self.A, self.P_initial).NormFrobenius()
 
         sum_cols_P = sum_of_columns(self.P)
         assert np.allclose(sum_cols_P[:], 1.0)
@@ -108,7 +112,7 @@ class MSRSB(object):
         assert np.all(a[:] == 1.0)
         return P
 
-    def smooth_prolongation_operator(self, niter=100):
+    def smooth_prolongation_operator(self, niter=10):
         """
         Parameters
         ----------
@@ -155,29 +159,13 @@ class MSRSB(object):
 
         assert np.allclose(sum_cols_P[:], 1.0)
 
-        smoothness = mat_multiply(self.A, self.P).NormFrobenius() / mat_multiply(self.A, self.P_initial).NormFrobenius()
+        smoothness = mat_multiply(self.A, self.P).NormFrobenius() / self.initial_norm
         logger.debug("smoothness of prolongation operator is %g", smoothness)
 
         assert ierr == 0
 
-    def solve_one_step_msfv(self, rhs):
-        return self.__solve_one_step(rhs, "msfv")
-
-    def solve_one_step_msfe(self, rhs):
-        return self.__solve_one_step(rhs, "msfe")
-
-    def __solve_one_step(self, rhs, method):
+    def __solve_one_step(self, rhs, RAP, R):
         # Solves P*(RAP)^-1* R*rhs
-        A, P = self.A, self.P
-        assert method in ["msfv", "msfe"]
-        if method == "msfv":
-            R = self.R
-        if method == "msfe":
-            R = self.P
-
-        AP = mat_multiply(A, P)
-
-        RAP = mat_multiply(R, AP, transpose_1=True)
         assert np.max(np.abs(sum_of_columns(RAP))) < RAP.NormInf() * 1e-10
 
         rhs_coarse = Epetra.Vector(R.DomainMap())
@@ -186,6 +174,7 @@ class MSRSB(object):
 
         # Set dirichlet boundary condition at a point
         row = 0
+        RAP = Epetra.CrsMatrix(RAP)
         RAP = epetra_set_matrow_to_zero(RAP, row=0)
         rhs_coarse = epetra_set_vecrow_to_zero(rhs_coarse, row=0)
         if row in RAP.Map().MyGlobalElements():
@@ -194,8 +183,8 @@ class MSRSB(object):
 
         sol_coarse = solve_direct(RAP, rhs_coarse)
 
-        sol_fine = Epetra.Vector(P.RangeMap())
-        P.Multiply(False, sol_coarse, sol_fine)
+        sol_fine = Epetra.Vector(self.P.RangeMap())
+        self.P.Multiply(False, sol_coarse, sol_fine)
         return sol_fine
 
     def __compute_residual(self, rhs, x0, residual):
@@ -224,8 +213,13 @@ class MSRSB(object):
         ref_residual[:] = rhs[:] - temp[:]
         ref_residual_norm = ref_residual.NormInf()
 
+        AP = mat_multiply(self.A, self.P)
+
+        RAP_msfv = mat_multiply(self.R, AP, transpose_1=True)
+        RAP_msfe = mat_multiply(self.P, AP, transpose_1=True)
+
         residual = self.__compute_residual(rhs, x0, residual)
-        error = self.solve_one_step_msfv(residual)
+        error = self.__solve_one_step(residual, RAP_msfv, self.R)
         x0[:] += error[:]
 
         if residual.NormInf() / ref_residual_norm < tol:
@@ -239,14 +233,25 @@ class MSRSB(object):
         residual_prev_norm = 1.e50
         n_ilu_iter = 5
 
+        solver = AztecOO.AztecOO()
+        solver.SetAztecOption(AztecOO.AZ_solver, AztecOO.AZ_bicgstab)
+        solver.SetAztecOption(AztecOO.AZ_precond, AztecOO.AZ_dom_decomp)
+        solver.SetAztecOption(AztecOO.AZ_subdomain_solve, AztecOO.AZ_ilu)
+        solver.SetAztecOption(AztecOO.AZ_conv, AztecOO.AZ_rhs)
+        solver.SetAztecOption(AztecOO.AZ_output, 0)
+
         for iteration in xrange(max_iter):
-            for __ in xrange(max(n_ilu_iter, 100)):
-                residual = self.__compute_residual(rhs, x0, residual)
-                ilu.ApplyInverse(residual, error)
-                x0[:] += error[:]
+            print "Starting SMOOTHING"
+            residual = self.__compute_residual(rhs, x0, residual)
+            error[:] = 0.0
+            solver.Iterate(self.A, error, residual, n_ilu_iter, 1e-20)
+            x0[:] += error[:]
+
 
             residual = self.__compute_residual(rhs, x0, residual)
-            error = self.solve_one_step_msfe(residual)
+            logger.debug("Residual at iteration %d: %g", iteration,  residual.NormInf()[0] / ref_residual_norm)
+
+            error = self.__solve_one_step(residual, RAP_msfe, self.P)
 
             if residual.NormInf() / ref_residual_norm < tol:
                 logger.debug("Number of iterations for convergence: %d", iteration)
@@ -261,7 +266,9 @@ class MSRSB(object):
             x0[:] += error[:]
 
         residual = self.__compute_residual(rhs, x0, residual)
-        error = self.solve_one_step_msfv(residual)
+        error = self.__solve_one_step(residual, RAP_msfv, self.R)
         x0[:] += error[:]
 
         return x0
+
+

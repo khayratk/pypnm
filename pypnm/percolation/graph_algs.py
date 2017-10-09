@@ -2,7 +2,6 @@ import numpy as np
 from pypnm.porenetwork.constants import *
 from pypnm.util.igraph_utils import network_to_igraph
 import pyximport
-import pyximport
 from pyximport import install
 
 old_get_distutils_extension = pyximport.pyximport.get_distutils_extension

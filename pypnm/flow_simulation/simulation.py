@@ -49,7 +49,7 @@ class Simulation(object):
         self.vtk_writer.add_tube_field(array, array_name)
 
     def write_vtk_output(self, label):
-        output_filename = "dynamic" + str(label).zfill(8)
+        output_filename = "paraview" + str(label).zfill(8)
         self.vtk_writer.write(output_filename)
 
     def set_post_processing_window_bounds(self, bounding_percent):
@@ -250,14 +250,27 @@ class Simulation(object):
 
         add_field_to_hdf_file(filename, label, "pore_sat", network.pores.sat)
         add_field_to_hdf_file(filename, label, "p_c", network.pores.p_c)
-        add_field_to_hdf_file(filename, label, "pore_vol", network.pores.vol)
         add_field_to_hdf_file(filename, label, "p_w", network.pores.p_w)
+        add_field_to_hdf_file(filename, label, "p_n", network.pores.p_n)
+
+        add_field_to_hdf_file(filename, label, "pore_vol", network.pores.vol)
         add_field_to_hdf_file(filename, label, "pore_rad", network.pores.r)
         add_field_to_hdf_file(filename, label, "pore_status", network.pores.invaded)
 
-        add_field_to_hdf_file(filename, label, "tube_rad", network.tubes.r)
-        add_field_to_hdf_file(filename, label, "tube_status", network.tubes.invaded)
+        add_field_to_hdf_file(filename, label, "tube_r", network.tubes.r)
+        add_field_to_hdf_file(filename, label, "tube_l", network.tubes.l)
+        add_field_to_hdf_file(filename, label, "tube_A_tot", network.tubes.A_tot)
+
+
+        add_field_to_hdf_file(filename, label, "tube_invaded", network.tubes.invaded)
+
+        add_field_to_hdf_file(filename, 0, "G", network.pores.G)
+        add_field_to_hdf_file(filename, 0, "r", network.pores.r)
 
         add_field_to_hdf_file(filename, 0, "x", network.pores.x)
         add_field_to_hdf_file(filename, 0, "y", network.pores.y)
         add_field_to_hdf_file(filename, 0, "z", network.pores.z)
+
+
+
+

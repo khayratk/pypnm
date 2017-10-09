@@ -1,15 +1,10 @@
-"""
-The mod module
-"""
 import logging
 
 import numpy as np
 
-from pypnm.porenetwork import component
-
 logger = logging.getLogger('pypnm.pn_algorithms')
 
-sat_eps = 0.01
+sat_eps = 0.001
 
 
 def get_piston_disp_tubes(network, entry_pressure, flux_n, source_nonwett=None):

@@ -1,15 +1,9 @@
-from distutils.core import setup, find_packages
+from setuptools import setup, find_packages
 
 import os
 import sys
-import pypnm
 
 sys.path.append(os.getcwd())
-
-try:
-    from setuptools import setup
-except ImportError:
-    from distutils.core import setup
 
 setup(
     name='pypnm',
@@ -23,12 +17,19 @@ setup(
         'matplotlib',
         'pyevtk',
         'scikit-umfpack',
+        'petsc',
         'petsc4py',
         'colorama',
         'python-igraph',
-        'pymetis'
+        'pymetis',
+        'pandas',
+        'mpi4py',
+        'h5py',
+        'pandas',
+        'cython',
     ],
+    package_data={'': ['*.c', '*.pyx'], },
     author='Karim Khayrat',
     author_email='kkhayrat@gmail.com',
-    description='Pore Network Model'
+    description='Pore Network Modeling package'
 )

@@ -6,7 +6,7 @@ The simulation stops when breakthrough occurs.
 
 from pypnm.porenetwork.constants import WEST, EAST
 from pypnm.porenetwork.network_factory import unstructured_network_delaunay
-from pypnm.multiscale.multiscale_sim import MultiScaleSimUnstructured
+from pypnm.multiscale.multiscale_unstructured import MultiScaleSimUnstructured
 from pypnm.porenetwork.network_manipulation import remove_tubes_between_face_pores
 from PyTrilinos import Epetra
 from mpi4py import MPI
@@ -39,7 +39,7 @@ def multiscale_simulation():
     network_volume = mpicomm.bcast(network_volume)
 
     # Set number of subnetworks
-    num_subnetworks = 11
+    num_subnetworks = 20
 
     # Initialize solver
     multiscale_sim = MultiScaleSimUnstructured(network, num_subnetworks)
@@ -56,11 +56,16 @@ def multiscale_simulation():
     multiscale_sim.set_subnetwork_press_solver("petsc")
 
     print "starting simulation"
-
     dt = 0.01*network_volume / q_total
     print "time steps are", dt
 
     for i in xrange(100):
+        multiscale_sim.save()
+        multiscale_sim = MultiScaleSimUnstructured.load()
+        multiscale_sim.bc_const_source_xmin(wett_source=0.0, nwett_source=q_total)
+        multiscale_sim.bc_const_source_xmax(wett_source=-q_total, nwett_source=0.0)
+        multiscale_sim.initialize()
+
         multiscale_sim.advance_in_time(dt)
         # Output vtk and hf5 files for postprocessing
         multiscale_sim.output_vtk(i, "vtk_unstructured_flux_bc")

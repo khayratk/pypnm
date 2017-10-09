@@ -1,8 +1,10 @@
 import cProfile
 import pstats
 
-from pypnm.multiscale.multiscale_sim import MultiScaleSimStructured
+from pypnm.multiscale.multiscale_structured import MultiScaleSimStructured
 from pypnm.porenetwork.network_factory import structured_network
+from pypnm.porenetwork.constants import EAST, WEST
+from pypnm.porenetwork.network_manipulation import remove_tubes_between_face_pores
 from sim_settings import sim_settings
 
 
@@ -33,6 +35,9 @@ def multiscale_fixed_flux():
 
     network = structured_network(Nx=n_fine_per_cell * nx, Ny=n_fine_per_cell * ny, Nz=n_fine_per_cell * nz)
     network.set_zero_volume_all_tubes()
+    remove_tubes_between_face_pores(network, WEST)
+    remove_tubes_between_face_pores(network, EAST)
+
     multiscale_sim = MultiScaleSimStructured(network, (nx, ny, nz))
     multiscale_sim.set_subnetwork_press_solver(sim_settings['multiscale']['solver'])
     multiscale_sim.set_delta_s_max(sim_settings['multiscale']['ds'])
@@ -57,9 +62,9 @@ def print_profiling_info(filename):
 if __name__ == "__main__":
     import logging
     from pypnm.util.logging_pypnm import logger
-    logger.setLevel(logging.WARN)
+    logger.setLevel(logging.DEBUG)
 
-    cProfile.run("test_multiscale_fixed_flux()", 'restats')
+    cProfile.run("multiscale_fixed_flux()", 'restats')
     print_profiling_info('restats')
 
 

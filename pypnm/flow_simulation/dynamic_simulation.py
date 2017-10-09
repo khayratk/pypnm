@@ -1,39 +1,24 @@
 import copy
 import logging
-import sys
 
 import numpy as np
 
 from pypnm.attribute_calculators.conductance_calc import ConductanceCalc
 from pypnm.attribute_calculators.pc_computer import DynamicCapillaryPressureComputer
+from pypnm.flow_simulation.simulation import Simulation
+from pypnm.flow_simulation.simulation_bc import SimulationBoundaryCondition
 from pypnm.linalg.linear_system_solver import PressureSolverDynamicDirichlet, laplacian_from_network
 from pypnm.porenetwork.constants import NWETT, WETT
 from pypnm.porenetwork.pn_algorithms import update_pore_status, update_tube_piston_w, snapoff_all_tubes, \
     get_piston_disp_tubes, invade_tube_nw, get_piston_disp_tubes_wett, invade_tube_w
 from pypnm.porenetwork.pore_element_models import JNModel
 from pypnm.porenetwork.saturation_computer import DynamicSaturationComputer
-from pypnm.flow_simulation.simulation import Simulation
-from pypnm.flow_simulation.simulation_bc import SimulationBoundaryCondition
 from sim_settings import sim_settings
 
-logger = logging.getLogger('pypnm')
 from numpy.linalg import norm
-from pypnm.linalg.trilinos_interface import trilinos_ml_prec, trilinos_solve, vector_numpy_to_epetra, matrix_scipy_to_epetra
 from pypnm.linalg.petsc_interface import get_petsc_ksp, petsc_solve_from_ksp
 
-try:
-    from scikits.umfpack import splu, spsolve
-except ImportError:
-    pass
-
-try:
-    import petsc4py
-    from mpi4py import MPI
-
-    petsc4py.init(sys.argv)
-    from petsc4py import PETSc
-except ImportError:
-    pass
+logger = logging.getLogger('pypnm')
 
 
 class DynamicSimulation(Simulation):
@@ -90,12 +75,12 @@ class DynamicSimulation(Simulation):
     def reset_status(self):
         """
         Resets the saturation in all pores as well as invasion state of all pores and tubes to those at the
-        start of the previous global time-step.
+        start of the previous call to advance_in_time.
         """
         self.network.pores.sat[:] = self.sat_start
         self.network.tubes.invaded[:] = self.tube_invaded_start
         self.network.pores.invaded[:] = self.pores_invaded_start
-        self.update_capillary_pressure()
+        self.__update_capillary_pressure()
         self.set_boundary_conditions(self.bc_start)
 
         self.network.pores.p_w[:] = 0.0
@@ -103,6 +88,14 @@ class DynamicSimulation(Simulation):
         self.time = self.time_start
 
     def set_boundary_conditions(self, bc):
+        """
+        Set boundary condition for simulation
+
+        Parameters
+        ----------
+        bc: SimulationBoundaryCondition
+
+        """
         self.bc = copy.deepcopy(bc)
         self.__set_rhs_source_arrays(self.bc)
         self.total_sink_nonwett = self.__compute_total_sink(NWETT)
@@ -115,6 +108,36 @@ class DynamicSimulation(Simulation):
         self.bool_accounted_pores[self.bc.pi_list_outlet] = 0  # Ignore saturation for pressure boundary conditions
 
         self.sat_comp = DynamicSaturationComputer(self.network, self.bool_accounted_pores)
+
+        self.pi_nghs_of_w_sinks_interior = {}
+        for pi in self.bc.pi_list_w_sink:
+            self.pi_nghs_of_w_sinks_interior[pi] = np.setdiff1d(self.network.ngh_pores[pi], self.bc.pi_list_w_sink)
+
+    def advance_in_time(self, delta_t):
+        """
+        Advances the simulation to a specified time. Boundary conditions should be set before calling this function.
+
+        Parameters
+        ----------
+        delta_t: float
+            Time difference between initial state and final state of the simulation.
+
+        """
+        logger.info("Starting simulation with time criterion")
+
+        self.stop_time = self.time + delta_t
+
+        def stop_criterion():
+            return self.time >= self.stop_time
+
+        self.sat_start[:] = np.copy(self.network.pores.sat)
+        self.tube_invaded_start[:] = np.copy(self.network.tubes.invaded)
+        self.pores_invaded_start[:] = np.copy(self.network.pores.invaded)
+
+        self.time_start = self.time
+        self.bc_start = copy.deepcopy(self.bc)
+
+        return self.__advance(stop_criterion)
 
     def __set_rhs_source_arrays(self, bc):
         """
@@ -162,9 +185,9 @@ class DynamicSimulation(Simulation):
 
         if self.bc.no_dirichlet:
             pi_dirichlet = ((self.rhs_source_nonwett + self.rhs_source_wett) == 0.0).nonzero()[0][0]
-            press_solver.set_dirichlet_pores(pi_list=pi_dirichlet, value=0.0)
+            press_solver.set_dirichlet_pores(pi_list=[pi_dirichlet], value=0.0)
 
-        logger.debug("Fixing boundary conditions")
+        logger.debug("Solving Pressure")
         self.network.pores.p_w[:] = press_solver.solve(self.press_solver_type)
 
         self.network.pores.p_n[:] = self.network.pores.p_w + self.network.pores.p_c
@@ -251,9 +274,114 @@ class DynamicSimulation(Simulation):
                 dt /= 2.0
                 print "decreasing timestep to", dt
 
-
         print "timestep is", dt
         return dt
+
+    def __check_mass_conservation(self):
+        if self.bc.no_dirichlet:
+            total_flux = np.sum(self.rhs_source_wett) + np.sum(self.rhs_source_nonwett)
+            source_max = np.max(np.abs(self.rhs_source_nonwett)) + np.max(np.abs(self.rhs_source_wett))
+            assert np.abs(total_flux) <= source_max / 1.e6, "total flux is %e. Maximum source is %e" % (
+            total_flux, source_max)
+
+    def __adjust_magnitude_wetting_sink_pores(self):
+        """
+        Adjusts the magnitude of the sink pores when their status changes so that the total sink remains constant.
+        If no more sink pores are available, the source pores are adjusted.
+        """
+        network = self.network
+        p_c = network.pores.p_c
+        sat = network.pores.sat
+        pi_list_sink = self.bc.pi_list_w_sink
+        pi_list_source = self.bc.pi_list_w_source
+
+        # TODO: Above a certain threshold block a wetting sink using self.rhs_source_wett[pi] = 0.0
+        for pi in pi_list_sink:
+            pi_nghs_interior = self.pi_nghs_of_w_sinks_interior[pi]
+            if len(pi_nghs_interior) == 0:
+               pi_nghs_interior = network.ngh_pores[pi]
+            pc_max_ngh = max(p_c[pi_nghs_interior])  # For small arrays np.max is slow
+
+            if (p_c[pi] > 1.5 * pc_max_ngh) and (sat[pi] > 0.9):  # Heuristic that can be improved
+                self.rhs_source_wett[pi] = 0.0
+                logger.debug("freezing W sink %d. p_c: %g. Max pc_ngh: %g. sat: %g", pi, p_c[pi], pc_max_ngh,  sat[pi])
+
+        total_after_blockage = np.sum(self.rhs_source_wett[pi_list_sink])
+        assert total_after_blockage <= 0.0
+
+        # Scale wetting sinks so that their total is equal to self.q_w_tot_sink
+        if total_after_blockage < 0.0:
+            self.rhs_source_wett[pi_list_sink] = self.rhs_source_wett[pi_list_sink] * self.q_w_tot_sink / total_after_blockage
+            assert np.all(self.rhs_source_wett[pi_list_sink] <= 0.0)
+
+        elif total_after_blockage == 0.0 and self.q_w_tot_sink < 0.0:
+            # If there is net imbibition and the simulation boundary conditions are defined
+            # by sources then scale the wetting sources.
+
+            if ((self.q_w_tot_source + self.q_w_tot_sink) > 0.0) and self.bc.no_dirichlet:
+                self.rhs_source_wett[pi_list_source] = (self.rhs_source_wett[pi_list_source] *
+                                                   (self.q_w_tot_source + self.q_w_tot_sink)/self.q_w_tot_source)
+            # Otherwise exit simulation
+            else:
+                logger.warning("Total sink before blockage is %e")
+                logger.warning("Cannot adjust wetting sink")
+                return -1
+
+        assert np.all(self.rhs_source_wett[pi_list_sink] <= 0.0)
+
+        self.__check_mass_conservation()
+
+    def __adjust_magnitude_nonwetting_sink_pores(self):
+        """
+        Adjusts the magnitude of the sink pores when their status changes so that the total sink remains constant.
+        If no more sink pores are available, the source pores are adjusted.
+        """
+        network = self.network
+
+        pi_list_sink = self.bc.pi_list_nw_sink
+        pi_list_source = self.bc.pi_list_nw_source
+
+        rhs_source = self.rhs_source_nonwett
+
+        if np.sum(self.q_n_tot_sink) == 0.0:
+            return
+
+        for pi in pi_list_sink:
+
+            # Set a nonwetting sink to be frozen if it is completely filled with the wetting fluid.
+            if network.pores.invaded[pi] == WETT:
+                rhs_source[pi] = 0.0
+                logger.debug("freezing NW sink %d", pi)
+                self.freeze_sink_nw[pi] = 1
+
+            # Set a nonwetting sink to be unfrozen if it surpasses a certain nonwetting threshold
+            if (self.freeze_sink_nw.setdefault(pi, 0) == 1) & (network.pores.sat[pi] > 0.5):
+                logger.debug("Unfreezing NW sink %d", pi)
+                self.freeze_sink_nw[pi] = 0
+
+            # Freeze a nonwetting sink.
+            if self.freeze_sink_nw.setdefault(pi, 0) == 1:
+                logger.debug("Setting NW sink to zero since it is marked as frozen. Its Saturation is %e" % network.pores.sat[pi])
+                rhs_source[pi] = 0.0
+
+        total_after_blockage = np.sum(self.rhs_source_nonwett[pi_list_sink])
+
+        assert total_after_blockage <= 0.0
+
+        if total_after_blockage < 0.0:
+            rhs_source[pi_list_sink] = rhs_source[pi_list_sink] * self.q_n_tot_sink / total_after_blockage
+            assert np.all(rhs_source[pi_list_sink] <= 0.0)
+
+        elif total_after_blockage == 0.0 and self.q_n_tot_sink < 0.0:
+
+            # If drainage and the simulation is defined solely by sources then scale the nonwetting sources
+            if ((self.q_n_tot_source + self.q_n_tot_sink) > 0.0) and self.bc.no_dirichlet:
+                rhs_source[pi_list_source] = rhs_source[pi_list_source] * (self.q_n_tot_source + self.q_n_tot_sink) / self.q_n_tot_source
+            else:
+                logger.warning("Cannot adjust nonwetting sink")
+                return -1
+
+        self.__check_mass_conservation()
 
     def __adjust_magnitude_sink_pores(self, FLUID):
         """
@@ -261,100 +389,11 @@ class DynamicSimulation(Simulation):
         If no more sink pores are available, the source pores are adjusted.
         """
 
-        def check_mass_conservation():
-            if self.bc.no_dirichlet:
-                total_flux = np.sum(self.rhs_source_wett) + np.sum(self.rhs_source_nonwett)
-                source_max = np.max(np.abs(self.rhs_source_nonwett)) + np.max(np.abs(self.rhs_source_wett))
-                assert np.abs(total_flux) <= source_max/1.e6, "total flux is %e. Maximum source is %e" % (total_flux, source_max)
-
-        network = self.network
         if FLUID == WETT:
-            pi_list_sink = self.bc.pi_list_w_sink
-            pi_source = self.bc.pi_list_w_source
-
-            # TODO: Above a certain threshold block a wetting sink using self.rhs_source_wett[pi] = 0.0
-            for pi in pi_list_sink:
-                # pi_nghs_interior = np.setdiff1d(self.network.ngh_pores[pi], pi_list_sink, assume_unique=False) # TODO: Slow
-                # if len(pi_nghs_interior) == 0:
-                #    pi_nghs_interior = self.network.ngh_pores[pi]
-                pi_nghs_interior = self.network.ngh_pores[pi]
-                pc_max_ngh = np.max(self.network.pores.p_c[pi_nghs_interior])
-
-                sat_pi = self.network.pores.sat[pi]
-                if (self.network.pores.p_c[pi] > 1.5 * pc_max_ngh) and (sat_pi > 0.9):
-                    self.rhs_source_wett[pi] = 0.0
-                    pc_pi = self.network.pores.p_c[pi]
-                    logger.debug("freezing W sink %d. p_c: %g. Max pc_ngh: %g. sat: %g", pi,
-                                 pc_pi, pc_max_ngh,  sat_pi)
-
-            total_after_blockage = np.sum(self.rhs_source_wett[pi_list_sink])
-            assert total_after_blockage <= 0.0
-
-            # Scale wetting sinks so that their total is equal to self.q_w_tot_sink
-            if total_after_blockage < 0.0:
-                self.rhs_source_wett[pi_list_sink] = self.rhs_source_wett[pi_list_sink] * self.q_w_tot_sink / total_after_blockage
-                assert np.all(self.rhs_source_wett[pi_list_sink] <= 0.0)
-
-            elif total_after_blockage == 0.0 and self.q_w_tot_sink < 0.0:
-                # If imbibition  and the simulation is defined solely by sources then scale the wetting sources
-                if ((self.q_w_tot_source + self.q_w_tot_sink) > 0.0) and self.bc.no_dirichlet:
-                    self.rhs_source_wett[pi_source] = (self.rhs_source_wett[pi_source] *
-                                                       (self.q_w_tot_source + self.q_w_tot_sink)/self.q_w_tot_source)
-                # Otherwise set to zero.
-                else:
-                    logger.warning("Total sink before blockage is %e")
-                    logger.warning("Cannot adjust wetting sink")
-                    return -1
-
-            assert np.all(self.rhs_source_wett[pi_list_sink] <= 0.0)
-
-        check_mass_conservation()
+            return self.__adjust_magnitude_wetting_sink_pores()
 
         if FLUID == NWETT:
-            pi_list_sink = self.bc.pi_list_nw_sink
-            pi_source = self.bc.pi_list_nw_source
-
-            rhs_source = self.rhs_source_nonwett
-
-            if np.sum(self.q_n_tot_sink) == 0.0:
-                return
-
-            for pi in pi_list_sink:
-
-                # Set a nonwetting sink to be frozen if it is completely filled with the wetting fluid.
-                if network.pores.invaded[pi] == WETT:
-                    rhs_source[pi] = 0.0
-                    logger.debug("freezing NW sink %d", pi)
-                    self.freeze_sink_nw[pi] = 1
-
-                # Set a nonwetting sink to be unfrozen if it surpasses a certain nonwetting threshold
-                if (self.freeze_sink_nw.setdefault(pi, 0) == 1) & (network.pores.sat[pi] > 0.5):
-                    logger.debug("Unfreezing NW sink %d", pi)
-                    self.freeze_sink_nw[pi] = 0
-
-                # Freeze a nonwetting sink.
-                if self.freeze_sink_nw.setdefault(pi, 0) == 1:
-                    logger.debug("Setting NW sink to zero since it is marked as frozen. Its Saturation is %e" % network.pores.sat[pi])
-                    rhs_source[pi] = 0.0
-
-            total_after_blockage = np.sum(self.rhs_source_nonwett[pi_list_sink])
-
-            assert total_after_blockage <= 0.0
-
-            if total_after_blockage < 0.0:
-                rhs_source[pi_list_sink] = rhs_source[pi_list_sink] * self.q_n_tot_sink / total_after_blockage
-                assert np.all(rhs_source[pi_list_sink] <= 0.0)
-
-            elif total_after_blockage == 0.0 and self.q_n_tot_sink < 0.0:
-
-                # If drainage and the simulation is defined solely by sources then scale the nonwetting sources
-                if ((self.q_n_tot_source + self.q_n_tot_sink) > 0.0) and self.bc.no_dirichlet:
-                    rhs_source[pi_source] = rhs_source[pi_source] * (self.q_n_tot_source + self.q_n_tot_sink) / self.q_n_tot_source
-                else:
-                    logger.warning("Cannot adjust nonwetting sink")
-                    return -1
-
-        check_mass_conservation()
+            return self.__adjust_magnitude_nonwetting_sink_pores()
 
     def __invade_nonwetting_source_pores(self):
         self.network.pores.invaded[self.bc.pi_list_nw_source] = NWETT
@@ -386,7 +425,7 @@ class DynamicSimulation(Simulation):
             if ierr == -1:
                 STOP_FLAG = True
                 break
-            self.update_capillary_pressure()
+            self.__update_capillary_pressure()
 
             self.k_comp.compute()  # Side effect- Computes network.tubes.k_n and k_w
 
@@ -424,7 +463,7 @@ class DynamicSimulation(Simulation):
 
         def interior_loop():
             self.__invade_nonwetting_source_pores()
-            self.update_capillary_pressure()
+            self.__update_capillary_pressure()
 
             logger.debug("Snapping off Tubes")
             snapoff_all_tubes(network, pe_comp)
@@ -450,7 +489,7 @@ class DynamicSimulation(Simulation):
 
             self.__solve_linear_system()
             self.__invade_nonwetting_source_pores()
-            self.update_capillary_pressure()
+            self.__update_capillary_pressure()
 
             logger.debug("Done with interior loop")
 
@@ -521,17 +560,7 @@ class DynamicSimulation(Simulation):
 
         return 0
 
-    def advance_in_time(self, delta_t):
-        logger.info("Starting simulation with time criterion")
-
-        self.stop_time = self.time + delta_t
-
-        def stop_criterion():
-            return self.time >= self.stop_time
-
-        return self.__advance(stop_criterion)
-
-    def update_capillary_pressure(self):
+    def __update_capillary_pressure(self):
         self.pc_comp.compute()
 
         if len(self.bc.pi_list_inlet) > 0:
@@ -543,12 +572,6 @@ class DynamicSimulation(Simulation):
     def __advance(self, stop_criterion):
         self.network.pores.p_w[:] = 0.0
         self.network.pores.p_n[:] = 0.0
-
-        self.sat_start[:] = np.copy(self.network.pores.sat)
-        self.tube_invaded_start[:] = np.copy(self.network.tubes.invaded)
-        self.pores_invaded_start[:] = np.copy(self.network.pores.invaded)
-        self.time_start = self.time
-        self.bc_start = copy.deepcopy(self.bc)
 
         network = self.network
 
@@ -568,8 +591,6 @@ class DynamicSimulation(Simulation):
         network.pores.invaded[self.bc.pi_list_nw_source] = NWETT
 
         #  Notes: During loop, self.q_n_tot and self.q_w_tot are NOT modified. But self.rhs_source_* are updated
-
-        logger.debug(self.bc)
         counter = 0
         time_init = self.time
         while True:
@@ -582,10 +603,10 @@ class DynamicSimulation(Simulation):
             assert np.all(network.pores.invaded[self.rhs_source_nonwett > 0.0] == 1)
 
             logger.debug("Solving Pressure")
-            self.update_capillary_pressure()
+            self.__update_capillary_pressure()
 
             ierr = self.__solve_pressure_and_pore_status()
-            self.update_capillary_pressure()
+            self.__update_capillary_pressure()
 
             if ierr == -1:
                 logger.warning("Exiting solver because nonwetting sinks or wetting sinks cannot be adjusted anymore")
@@ -648,7 +669,7 @@ class DynamicSimulation(Simulation):
             logger.debug("="*80)
             logger.debug("")
 
-            if dt_ratio < 1e-8:
+            if dt_ratio < 1e-4 and counter > 1000:
                 logger.warning("Exiting solver because time step too slow.")
                 break
 
