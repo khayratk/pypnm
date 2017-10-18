@@ -5,6 +5,25 @@ from pypnm.porenetwork.component import tubes_within_pore_set
 from pypnm.porenetwork.subnetwork import SubNetwork
 from pypnm.util.bounding_box import BoundingBox
 from pypnm.porenetwork.constants import FACES
+from pypnm.linalg.laplacianmatrix import laplacian_from_network
+from pypnm.linalg.petsc_interface import scipy_to_petsc_matrix
+
+import petsc4py
+import sys
+
+petsc4py.init(sys.argv)
+from petsc4py import PETSc
+
+
+def reorder_network(network):
+    A = laplacian_from_network(network)
+    A = scipy_to_petsc_matrix(A)
+    a_is, b_is = A.getOrdering(PETSc.Mat.OrderingType.RCM)
+    a = np.asarray(a_is.getIndices())
+    b = np.asarray(b_is.getIndices())
+    assert np.all(a == b)
+    permuted_network = SubNetwork(network, a)
+    return permuted_network
 
 
 def prune_network(network, bounding_percent=(-1, 2, -1, 2, -1, 2)):
