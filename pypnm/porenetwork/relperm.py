@@ -5,7 +5,14 @@ from pypnm.attribute_calculators.conductance_calc import ConductanceCalc
 from pypnm.linalg.linear_system_solver import LinearSystemStandard
 from pypnm.percolation import graph_algs
 from pypnm.porenetwork.constants import *
-from sim_settings import *
+try:
+    from sim_settings import *
+except ImportError:
+    sim_settings = dict()
+    sim_settings["fluid_properties"] = dict()
+    sim_settings["fluid_properties"]['mu_n'] = 1.0
+    sim_settings["fluid_properties"]['mu_w'] = 1.0
+    sim_settings["fluid_properties"]['gamma'] = 1.0
 
 
 class _PressureSolver(object):

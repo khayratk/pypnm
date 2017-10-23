@@ -1,8 +1,13 @@
 from pypnm.porenetwork.constants import *
 import numpy as np
-from sim_settings import *
 from pypnm.porenetwork.pore_element_models import BasePEModel
 
+try:
+    from sim_settings import *
+except ImportError:
+    sim_settings = dict()
+    sim_settings["fluid_properties"] = dict()
+    sim_settings["fluid_properties"]['gamma'] = 1.0
 
 class CapillaryPressureComputer(object):
     def __init__(self, network):

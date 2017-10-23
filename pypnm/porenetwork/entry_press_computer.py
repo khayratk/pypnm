@@ -1,6 +1,12 @@
 import numpy as np
 from pypnm.porenetwork.constants import *
-from sim_settings import *
+
+try:
+    from sim_settings import *
+except ImportError:
+    sim_settings = dict()
+    sim_settings["fluid_properties"] = dict()
+    sim_settings["fluid_properties"]['gamma'] = 1.0
 
 from pore_element_models import BasePEModel
 

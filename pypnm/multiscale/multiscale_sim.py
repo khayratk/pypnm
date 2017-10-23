@@ -15,7 +15,15 @@ from pypnm.porenetwork.constants import EAST, WEST
 from pypnm.porenetwork.subnetwork import SubNetwork
 from pypnm.util.hd5_output import add_field_to_hdf_file, add_attribute_to_hdf_file
 from pypnm.util.igraph_utils import network_to_igraph
-from sim_settings import sim_settings
+try:
+    from sim_settings import sim_settings
+except ImportError:
+    sim_settings = dict()
+    sim_settings["fluid_properties"] = dict()
+    sim_settings["fluid_properties"]['mu_n'] = 1.0
+    sim_settings["fluid_properties"]['mu_w'] = 1.0
+    sim_settings["fluid_properties"]['gamma'] = 1.0
+
 
 
 def require_path(path):

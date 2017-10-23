@@ -241,7 +241,6 @@ class MSRSB(object):
         solver.SetAztecOption(AztecOO.AZ_output, 0)
 
         for iteration in xrange(max_iter):
-            print "Starting SMOOTHING"
             residual = self.__compute_residual(rhs, x0, residual)
             error[:] = 0.0
             solver.Iterate(self.A, error, residual, n_ilu_iter, 1e-20)

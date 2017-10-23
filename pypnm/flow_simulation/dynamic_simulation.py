@@ -13,7 +13,14 @@ from pypnm.porenetwork.pn_algorithms import update_pore_status, update_tube_pist
     get_piston_disp_tubes, invade_tube_nw, get_piston_disp_tubes_wett, invade_tube_w
 from pypnm.porenetwork.pore_element_models import JNModel
 from pypnm.porenetwork.saturation_computer import DynamicSaturationComputer
-from sim_settings import sim_settings
+
+try:
+    from sim_settings import sim_settings
+except ImportError:
+    sim_settings = dict()
+    sim_settings["fluid_properties"] = dict()
+    sim_settings["fluid_properties"]['gamma'] = 1.0
+
 
 from numpy.linalg import norm
 from pypnm.linalg.petsc_interface import get_petsc_ksp, petsc_solve_from_ksp

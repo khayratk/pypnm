@@ -1,7 +1,16 @@
 import numpy as np
 from pypnm.porenetwork.constants import *
 import math
-from sim_settings import *
+
+try:
+    from sim_settings import *
+except ImportError:
+    sim_settings = dict()
+    sim_settings["fluid_properties"] = dict()
+    sim_settings["fluid_properties"]['mu_n'] = 1.0
+    sim_settings["fluid_properties"]['mu_w'] = 1.0
+    sim_settings["fluid_properties"]['gamma'] = 1.0
+
 from pypnm.porenetwork.component import neighboring_edges_to_vertices
 
 
