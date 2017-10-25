@@ -6,6 +6,8 @@ from pypnm.ams.msrsb import MSRSB
 from pypnm.linalg.trilinos_interface import matrix_scipy_to_epetra, vector_numpy_to_epetra
 from pypnm.multiscale.multiscale_unstructured import MultiScaleSimUnstructured
 from pypnm.util.igraph_utils import scipy_matrix_to_igraph, coarse_graph_from_partition, support_of_basis_function
+from scipy.sparse.csgraph import connected_components
+from pypnm.linalg.laplacianmatrix import get_adjlist
 
 
 def solve_multiscale(ms, A, b, tol=1e-5):
@@ -16,11 +18,33 @@ def solve_multiscale(ms, A, b, tol=1e-5):
     return sol
 
 
+def partition_multicomponent_graph(A_scipy, v_per_subdomain=1000):
+    final_labels = -np.ones(A_scipy.shape[0], dtype=np.int)
+    partition_ind_shift = 0
+    n_components, labels_components = connected_components(A_scipy, directed=False)
+
+    for component_id in xrange(n_components):
+        component_n = (labels_components == component_id).nonzero()[0]
+        A_sub = A_scipy[component_n, :][:, component_n]
+        num_subpartitions = max(len(component_n) / v_per_subdomain, 2)
+        _, labels_subpartition = pymetis.part_graph(num_subpartitions, get_adjlist(A_sub))
+        assert max(labels_subpartition)+1 == num_subpartitions
+        assert np.all(final_labels[component_n] == -1)
+        final_labels[component_n] = np.asarray(labels_subpartition) + partition_ind_shift
+
+        partition_ind_shift += num_subpartitions
+
+    assert np.all(final_labels != -1), len((final_labels == -1).nonzero()[0])
+
+    return partition_ind_shift, final_labels
+
+
 def solve_with_msrsb(ia, ja, a, rhs, tol=1e-3, v_per_subdomain=1000):
     comm = Epetra.PyComm()
     num_proc = comm.NumProc()
 
     A_scipy = csr_matrix((a, ia, ja))
+
     graph = scipy_matrix_to_igraph(A_scipy)
 
     A = matrix_scipy_to_epetra(A_scipy)
@@ -33,13 +57,20 @@ def solve_with_msrsb(ia, ja, a, rhs, tol=1e-3, v_per_subdomain=1000):
     graph.vs["global_id"] = np.arange(graph.vcount())
     graph.es["global_id"] = np.arange(graph.ecount())
 
-    _, subgraph_ids_each_vertex = pymetis.part_graph(num_subdomains, graph.get_adjlist())
+    n_components, _ = connected_components(A_scipy, directed=False)
+
+    if n_components == 1:
+        _, subgraph_ids_each_vertex = pymetis.part_graph(num_subdomains, graph.get_adjlist())
+    else:
+        _, subgraph_ids_each_vertex = partition_multicomponent_graph(A_scipy, v_per_subdomain)
+        print "num of subdomains created", _
 
     subgraph_ids_each_vertex = np.asarray(subgraph_ids_each_vertex)
     graph.vs["subgraph_id"] = subgraph_ids_each_vertex
 
     # Assign a processor id to each subgraph
     coarse_graph = coarse_graph_from_partition(graph, subgraph_ids_each_vertex)
+
     _, proc_ids = pymetis.part_graph(num_proc, coarse_graph.get_adjlist())
     coarse_graph.vs['proc_id'] = proc_ids
     coarse_graph.vs["subgraph_id"] = np.arange(coarse_graph.vcount())

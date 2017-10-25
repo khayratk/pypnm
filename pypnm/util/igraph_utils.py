@@ -93,7 +93,8 @@ def support_of_basis_function(basis_id, graph, coarse_graph, basis_id_to_v_cente
 def scipy_matrix_to_igraph(matrix, directed=False):
     sources, targets = matrix.nonzero()
     edges = np.vstack((sources, targets)).T.tolist()
-    return ig.Graph(edges, directed=directed)
+    return ig.Graph(edges, directed=directed).simplify()
+
 
 
 def network_to_igraph(network, vertex_mask=None, edge_mask=None, edge_attributes=None, vertex_attributes=None):
