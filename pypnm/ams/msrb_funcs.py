@@ -111,4 +111,4 @@ def solve_with_msrsb(ia, ja, a, rhs, tol=1e-3, v_per_subdomain=1000):
         my_basis_support[i] = np.intersect1d(support_vertices, my_global_elements).astype(np.int32)
 
     ms = MSRSB(A, my_restriction_supports, my_basis_support)
-    return np.asarray(solve_multiscale(ms, A, vector_numpy_to_epetra(rhs), tol=tol)), ms
+    return np.asarray(solve_multiscale(ms, A, vector_numpy_to_epetra(rhs), tol=tol)), ms, subgraph_id_to_v_center_id
