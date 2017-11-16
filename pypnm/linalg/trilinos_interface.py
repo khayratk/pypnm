@@ -3,6 +3,7 @@ from PyTrilinos import Epetra, AztecOO, ML, EpetraExt, Amesos
 from mpi4py import MPI
 from scipy.sparse import coo_matrix
 
+
 def epetra_set_matrow_to_zero(A, row):
     if row in A.Map().MyGlobalElements():
         values, cols = A.ExtractGlobalRowCopy(row)
@@ -122,9 +123,8 @@ def matrix_epetra_to_scipy(A_epetra):
     rows = np.hstack(rows).astype(np.int)
     assert len(rows) == len(columns) == len(values)
 
-    solve_pressure_trilinos_from_scipy
-
     return coo_matrix((values, (rows, columns)))
+
 
 def vector_numpy_to_epetra(v):
     """
@@ -151,7 +151,7 @@ def trilinos_ml_prec(A_epetra):
               "smoother: type": "Aztec"
               }
 
-    prec = ML.MultiLevelPreconditioner(A_epetra)
+    prec = ML.MultiLevelPreconditioner(A_epetra, mlList)
     return prec
 
 
@@ -172,8 +172,9 @@ def solve_aztec(A, rhs, x=None, tol=1e-5, plist=None):
         x = Epetra.Vector(A.RangeMap())
 
     if plist is None:
-        plist = {"Solver": "GMRES",
+        plist = {"Solver": "bicgstab",
                  "Precond": "Dom_Decomp",
+                 "subdomain_solve": "ilu",
                  "Output": 0
                  }
 
@@ -187,16 +188,35 @@ def solve_aztec(A, rhs, x=None, tol=1e-5, plist=None):
     return x
 
 
-def solve_pressure_trilinos_from_scipy(A, rhs, x=None, tol=1e-15, plist=None):
+def solve_pressure_trilinos_from_scipy(A, rhs, x0=None, tol=1e-5, plist=None):
     A_epetra = matrix_scipy_to_epetra(A)
 
-    if x is None:
-        x_epetra = vector_numpy_to_epetra(x)
+    if x0 is not None:
+        x_epetra = vector_numpy_to_epetra(x0)
     else:
         x_epetra = Epetra.Vector(A_epetra.RangeMap())
 
     rhs_epetra = vector_numpy_to_epetra(rhs)
     return solve_aztec(A_epetra, rhs_epetra, x_epetra, tol, plist)
+
+
+def solve_pressure_mltrilinos_from_scipy(A, rhs, x0=None, tol=1e-5):
+    A_epetra = matrix_scipy_to_epetra(A)
+
+    if x0 is not None:
+        x_epetra = vector_numpy_to_epetra(x0)
+    else:
+        x_epetra = Epetra.Vector(A_epetra.RangeMap())
+
+    epetra_prec = trilinos_ml_prec(A_epetra)
+
+    rhs_epetra = vector_numpy_to_epetra(rhs)
+
+    x_epetra = trilinos_solve(A_epetra, rhs_epetra, epetra_prec, x=x_epetra, tol=tol)
+    #epetra_prec.DestroyPreconditioner()
+
+    return x_epetra[:]
+
 
 def solve_direct(A, rhs, x=None):
     if x is None:
@@ -230,11 +250,11 @@ def diagonal_inverse(A, scalar=1.0):
     map = A.RangeMap()
     v_diagonal = Epetra.Vector(map)
     A.ExtractDiagonalCopy(v_diagonal)
-    v_diagonal_inv = 1./v_diagonal[:]
+    v_diagonal_inv = 1. / v_diagonal[:]
 
     D_inv = Epetra.CrsMatrix(Epetra.Copy, map, 1)
     row_inds = D_inv.Map().MyGlobalElements()
-    D_inv.InsertGlobalValues(row_inds, row_inds, scalar*v_diagonal_inv)
+    D_inv.InsertGlobalValues(row_inds, row_inds, scalar * v_diagonal_inv)
     D_inv.FillComplete()
     return D_inv
 
