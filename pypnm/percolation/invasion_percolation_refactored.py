@@ -1,8 +1,9 @@
 import numpy as np
 from heapq import heappop, heappush
 
-def site_bond_invasion_percolation(graph, edge_weights, vertex_weights, source_vertices,
-                                   clusters = dict(), cluster_id_vertices=None, cluster_id_edges=None):
+
+def site_bond_invasion_percolation(graph, edge_weights, source_vertices,
+                                   clusters = dict(), vertex_weights=None, cluster_id_vertices=None, cluster_id_edges=None):
     """
     Parameters
     ----------
@@ -32,6 +33,9 @@ def site_bond_invasion_percolation(graph, edge_weights, vertex_weights, source_v
     if cluster_id_edges is None:
         cluster_id_edges = -np.ones(graph.ecount(), dtype=np.int)
 
+    if vertex_weights is None:
+        vertex_weights = np.zeros(graph.vcount(), dtype=np.int)
+
     ngh_vertices = graph.get_adjlist()
     ngh_edges = graph.get_inclist()
     edge_list = graph.get_edgelist()
@@ -53,8 +57,10 @@ def site_bond_invasion_percolation(graph, edge_weights, vertex_weights, source_v
 
     while frontier_edges or frontier_vertices:
         # Invade edge
-        if (not frontier_vertices) or frontier_edges[0][0] > frontier_vertices[0][0]:
-            weight, e = heappop(frontier_edges)
+        if (not frontier_vertices) or (frontier_edges and (frontier_edges[0][0] < frontier_vertices[0][0])):
+            tmp = heappop(frontier_edges)
+            print tmp
+            weight, e = tmp
             if edge_invaded[e] == 0:
                 edge_invaded[e] = 1
                 yield (0, e, weight)
@@ -80,27 +86,31 @@ def site_bond_invasion_percolation(graph, edge_weights, vertex_weights, source_v
                             heappush(frontier_edges, (edge_weights[e_ngh], e_ngh))
                             frontier_edge_marker[e_ngh] = 1
 
+            elif (v is not None) and (cluster_id_vertices[v] == -1):
+                heappush(frontier_vertices, (vertex_weights[v], v))
+                frontier_vertex_marker[v] = 1
+
         elif frontier_vertices:
             weight, v = heappop(frontier_vertices)
             if vertex_invaded[v] == 0:
                 vertex_invaded[v] = 1
                 yield (1, v, weight)
 
-            # Check for reconnecting clusters and add their periphery to  the frontier
+            # Check for reconnecting clusters and add their periphery to the frontier
             for e_ngh in ngh_edges[v]:
-                if cluster_id_edges[e_ngh] >= 0:
-                    c_id = cluster_id_edges[e_ngh]
-                    cluster = clusters.pop(c_id)
-                    for e1 in cluster[1]:
-                        frontier_edge_marker[e1] = 1
-                    for v1 in cluster[0]:
-                        cluster_id_vertices[v1] = -1
-                        for v_ngh, e_ngh in zip(ngh_vertices[v], ngh_edges[v]):
-                            if frontier_edge_marker[e_ngh] == 0:
-                                heappush(frontier_edges, (edge_weights[e_ngh], e_ngh, v_ngh))
-                                frontier_edge_marker[e_ngh] = 1
+                if frontier_edge_marker[e_ngh] == 0:
 
-        for v_ngh, e_ngh in zip(ngh_vertices[v], ngh_edges[v]):
-            if frontier_edge_marker[e_ngh] == 0:
-                heappush(frontier_edges, (edge_weights[e_ngh], e_ngh, v_ngh))
-                frontier_edge_marker[e_ngh] = 1
+                    if cluster_id_edges[e_ngh] >= 0:
+                        c_id = cluster_id_edges[e_ngh]
+                        cluster = clusters.pop(c_id)
+                        for e1 in cluster[1]:
+                            frontier_edge_marker[e1] = 1
+                        for v1 in cluster[0]:
+                            cluster_id_vertices[v1] = -1
+                            for v_ngh, e_ngh in zip(ngh_vertices[v], ngh_edges[v]):
+                                if frontier_edge_marker[e_ngh] == 0:
+                                    heappush(frontier_edges, (edge_weights[e_ngh], e_ngh))
+                                    frontier_edge_marker[e_ngh] = 1
+                    else:
+                        heappush(frontier_edges, (edge_weights[e_ngh], e_ngh))
+                        frontier_edge_marker[e_ngh] = 1
