@@ -29,6 +29,8 @@ def square_network(N):
 def structured_network(Nx, Ny, Nz, media_type="consolidated", periodic=False):
     dist_p2p = 160e-6
     network = StructuredPoreNetwork([Nx, Ny, Nz], dist_p2p, media_type=media_type, periodic=periodic)
+    network = reorder_network(network)  # Important for efficiency
+
     return network
 
 
