@@ -59,7 +59,6 @@ def site_bond_invasion_percolation(graph, edge_weights, source_vertices,
         # Invade edge
         if (not frontier_vertices) or (frontier_edges and (frontier_edges[0][0] < frontier_vertices[0][0])):
             tmp = heappop(frontier_edges)
-            print tmp
             weight, e = tmp
             if edge_invaded[e] == 0:
                 edge_invaded[e] = 1
