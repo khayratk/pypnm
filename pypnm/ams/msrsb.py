@@ -166,20 +166,23 @@ class MSRSB(object):
 
     def __solve_one_step(self, rhs, RAP, R):
         # Solves P*(RAP)^-1* R*rhs
-        assert np.max(np.abs(sum_of_columns(RAP))) < RAP.NormInf() * 1e-10
 
         rhs_coarse = Epetra.Vector(R.DomainMap())
 
         R.Multiply(True, rhs, rhs_coarse)
 
+        if not np.max(np.abs(sum_of_columns(RAP))) < RAP.NormInf() * 1e-10:
+            logger.warn("sum of matrix columns does not equal to zero")
+
         # Set dirichlet boundary condition at a point
-        row = 0
-        RAP = Epetra.CrsMatrix(RAP)
-        RAP = epetra_set_matrow_to_zero(RAP, row=0)
-        rhs_coarse = epetra_set_vecrow_to_zero(rhs_coarse, row=0)
-        if row in RAP.Map().MyGlobalElements():
-            ierr = RAP.ReplaceGlobalValues([row], [row], 1.0)
-            assert ierr == 0
+        if np.max(np.abs(sum_of_columns(RAP))) < RAP.NormInf() * 1e-10:
+            row = 0
+            RAP = Epetra.CrsMatrix(RAP)
+            RAP = epetra_set_matrow_to_zero(RAP, row=0)
+            rhs_coarse = epetra_set_vecrow_to_zero(rhs_coarse, row=0)
+            if row in RAP.Map().MyGlobalElements():
+                ierr = RAP.ReplaceGlobalValues([row], [row], 1.0)
+                assert ierr == 0
 
         sol_coarse = solve_direct(RAP, rhs_coarse)
 
@@ -187,17 +190,20 @@ class MSRSB(object):
         self.P.Multiply(False, sol_coarse, sol_fine)
         return sol_fine
 
-    def __compute_residual(self, rhs, x0, residual):
+    def __compute_residual(self, A, rhs, x0, residual):
         residual[:] = 0.0
-        self.A.Multiply(False, x0, residual)
+        A.Multiply(False, x0, residual)
         residual[:] = rhs[:] - residual[:]
         return residual
 
-    def iterative_solve(self, rhs, x0, tol=1.e-5, max_iter=200):
-        A = self.A
+    def iterative_solve(self, rhs, x0, tol=1.e-5, max_iter=200, A=None):
+        if A is None:
+            A = self.A
 
         rhs_sum = rhs.Comm().SumAll(np.sum(rhs[:]))
-        assert rhs_sum < rhs.NormInf() * 1e-8, rhs_sum
+        if not abs(rhs_sum) < abs(rhs.NormInf() * 1e-8):
+            logger.warn("sum of rhs does not equal to zero")
+
 
         residual = Epetra.Vector(A.RangeMap())
 
@@ -213,12 +219,12 @@ class MSRSB(object):
         ref_residual[:] = rhs[:] - temp[:]
         ref_residual_norm = ref_residual.NormInf()
 
-        AP = mat_multiply(self.A, self.P)
+        AP = mat_multiply(A, self.P)
 
         RAP_msfv = mat_multiply(self.R, AP, transpose_1=True)
         RAP_msfe = mat_multiply(self.P, AP, transpose_1=True)
 
-        residual = self.__compute_residual(rhs, x0, residual)
+        residual = self.__compute_residual(A, rhs, x0, residual)
         error = self.__solve_one_step(residual, RAP_msfv, self.R)
         x0[:] += error[:]
 
@@ -241,16 +247,15 @@ class MSRSB(object):
         solver.SetAztecOption(AztecOO.AZ_output, 0)
 
         for iteration in xrange(max_iter):
-            residual = self.__compute_residual(rhs, x0, residual)
+            residual = self.__compute_residual(A, rhs, x0, residual)
             error[:] = 0.0
-            solver.Iterate(self.A, error, residual, n_ilu_iter, 1e-20)
+            solver.Iterate(A, error, residual, n_ilu_iter, 1e-20)
             x0[:] += error[:]
 
-
-            residual = self.__compute_residual(rhs, x0, residual)
+            residual = self.__compute_residual(A, rhs, x0, residual)
             logger.debug("Residual at iteration %d: %g", iteration,  residual.NormInf()[0] / ref_residual_norm)
 
-            error = self.__solve_one_step(residual, RAP_msfe, self.P)
+            error = self.__solve_one_step(residual, RAP_msfv, self.P)
 
             if residual.NormInf() / ref_residual_norm < tol:
                 logger.debug("Number of iterations for convergence: %d", iteration)
@@ -264,7 +269,12 @@ class MSRSB(object):
 
             x0[:] += error[:]
 
-        residual = self.__compute_residual(rhs, x0, residual)
+            residual = self.__compute_residual(A, rhs, x0, residual)
+            error[:] = 0.0
+            solver.Iterate(A, error, residual, n_ilu_iter, 1e-20)
+            x0[:] += error[:]
+
+        residual = self.__compute_residual(A, rhs, x0, residual)
         error = self.__solve_one_step(residual, RAP_msfv, self.R)
         x0[:] += error[:]
 
