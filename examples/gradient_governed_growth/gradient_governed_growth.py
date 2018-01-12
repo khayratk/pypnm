@@ -12,6 +12,28 @@ import cProfile
 import pstats
 import time
 
+from pypnm.util.hd5_output import add_field_to_hdf_file
+from pypnm.util.utils import require_path
+
+
+def write_to_hdf(network, label, folder_name):
+    require_path(folder_name)
+    filename = folder_name + "/hdf_net.h5"
+
+    add_field_to_hdf_file(filename, label, "p_n", network.pores.p_n)
+    add_field_to_hdf_file(filename, label, "pore_invaded", network.pores.invaded)
+    add_field_to_hdf_file(filename, label, "tube_invaded", network.tubes.invaded)
+
+    add_field_to_hdf_file(filename, 0, "G", network.pores.G)
+    add_field_to_hdf_file(filename, 0, "pore_r", network.pores.r)
+
+    add_field_to_hdf_file(filename, 0, "pore_x", network.pores.x)
+    add_field_to_hdf_file(filename, 0, "pore_y", network.pores.y)
+    add_field_to_hdf_file(filename, 0, "pore_z", network.pores.z)
+
+    add_field_to_hdf_file(filename, 0, "tube_r", network.tubes.r)
+    add_field_to_hdf_file(filename, 0, "tube_l", network.tubes.l)
+    add_field_to_hdf_file(filename, 0, "pore_vol", network.pores.vol)
 
 def get_interface_invasion_throats(network, pressure, entry_pressure, tube_conductances):
     pore_list_1 = network.edgelist[:, 0]
@@ -91,6 +113,8 @@ def run():
                 network.export_to_vtk("output_viscous" + str(niter).zfill(4))
 
                 print "Number of throats invaded:", niter
+                write_to_hdf(network, niter, "hdf5_output")
+
 
     except KeyboardInterrupt:
         pass
