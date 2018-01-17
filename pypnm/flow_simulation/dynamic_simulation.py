@@ -14,13 +14,6 @@ from pypnm.porenetwork.pn_algorithms import update_pore_status, update_tube_pist
 from pypnm.porenetwork.pore_element_models import JNModel
 from pypnm.porenetwork.saturation_computer import DynamicSaturationComputer
 
-try:
-    from sim_settings import sim_settings
-except ImportError:
-    sim_settings = dict()
-    sim_settings["fluid_properties"] = dict()
-    sim_settings["fluid_properties"]['gamma'] = 1.0
-
 
 from numpy.linalg import norm
 from pypnm.linalg.petsc_interface import get_petsc_ksp, petsc_solve_from_ksp
@@ -29,7 +22,7 @@ logger = logging.getLogger('pypnm')
 
 
 class DynamicSimulation(Simulation):
-    def __init__(self, network, sim_id=0):
+    def __init__(self, network, fluid_properties, sim_id=0):
         super(DynamicSimulation, self).__init__(network)
 
         if np.any(network.pores.vol <= 0.0):
@@ -38,6 +31,7 @@ class DynamicSimulation(Simulation):
         if np.any(network.tubes.vol != 0.0):
             raise ValueError("Network throats have to all have zero volume for dynamic flow solver")
 
+        self.fluid_properties = fluid_properties
         self.SatComputer = DynamicSaturationComputer
         self.bool_accounted_pores = np.ones(network.nr_p, dtype=np.bool)
         self.sat_comp = self.SatComputer(network, self.bool_accounted_pores)
@@ -46,12 +40,12 @@ class DynamicSimulation(Simulation):
         self.press_solver_type = "AMG"
 
         self.pc_comp = DynamicCapillaryPressureComputer(network)
-        self.k_comp = ConductanceCalc(network)
+        self.k_comp = ConductanceCalc(network, self.fluid_properties)
 
         self.rhs_source_nonwett = np.zeros(network.nr_p)  # right hand side contributions to the system of equations
         self.rhs_source_wett = np.zeros(network.nr_p)     # for solving the wetting pressure
 
-        gamma = sim_settings['fluid_properties']['gamma']
+        gamma = self.fluid_properties['gamma']
         self.snap_off_press = 1.001*JNModel.snap_off_pressure(gamma=gamma, r=network.tubes.r)
         self.piston_entry = JNModel.piston_entry_pressure(r=network.tubes.r, gamma=gamma, G=network.tubes.G)
 

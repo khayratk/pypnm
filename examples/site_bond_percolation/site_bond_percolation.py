@@ -17,6 +17,5 @@ for x, (element_type, element_id, weight) in enumerate(site_bond_invasion_percol
     else:
         sat += network.pores.vol[element_id] / total_vol
         network.pores.invaded[element_id] = 1
-
     if sat == 1.0:
         break

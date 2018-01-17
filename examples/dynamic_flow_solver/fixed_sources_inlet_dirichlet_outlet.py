@@ -7,20 +7,25 @@ The simulation stops when a domain saturation of 0.5 has been reached
 
 import numpy as np
 from pypnm.porenetwork.constants import WEST, EAST
-from pypnm.porenetwork.network_factory import unstructured_network
+from pypnm.porenetwork.network_factory import unstructured_network_delaunay
 from pypnm.flow_simulation.dynamic_simulation import DynamicSimulation
 from pypnm.flow_simulation.simulation_bc import SimulationBoundaryCondition
+from sim_settings import sim_settings
+import logging
+
+logger = logging.getLogger('pypnm')
+logger.setLevel("WARN")
 
 
 def dynamic_simulation():
     # Generate small unstructured network.
-    network = unstructured_network(nr_pores=2000)
+    network = unstructured_network_delaunay(nr_pores=2000)
 
     # The implemented dynamic flow solver can only work with zero volume pore throats
     network.set_zero_volume_all_tubes()
 
     # Initialize solver
-    simulation = DynamicSimulation(network)
+    simulation = DynamicSimulation(network, sim_settings["fluid_properties"])
     simulation.press_solver_type = "petsc"
 
     # Set boundary conditions using list of pores and list of sources. Here a total inflow of q_total is used
@@ -54,7 +59,7 @@ def dynamic_simulation():
 
     for n in xrange(50):
         print ("TimeStep: %g" % delta_t_output)
-        dt_sim = simulation.advance_in_time(delta_t=delta_t_output)
+        simulation.advance_in_time(delta_t=delta_t_output)
 
         simulation.write_vtk_output(label=n)
         simulation.write_to_hdf(label=n, folder_name="paraview_dyn_run")

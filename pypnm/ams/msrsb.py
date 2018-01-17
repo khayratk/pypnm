@@ -255,7 +255,7 @@ class MSRSB(object):
             residual = self.__compute_residual(A, rhs, x0, residual)
             logger.debug("Residual at iteration %d: %g", iteration,  residual.NormInf()[0] / ref_residual_norm)
 
-            error = self.__solve_one_step(residual, RAP_msfv, self.P)
+            error = self.__solve_one_step(residual, RAP_msfe, self.P)
 
             if residual.NormInf() / ref_residual_norm < tol:
                 logger.debug("Number of iterations for convergence: %d", iteration)

@@ -1,17 +1,17 @@
-from pypnm.porenetwork.network_factory import structured_network
-from pypnm.porenetwork.constants import WEST, EAST
-from pypnm.linalg.laplacianmatrix import laplacian_from_network, LaplacianMatrix
-from pypnm.linalg.petsc_interface import petsc_solve_lu, petsc_solve
-from pypnm.linalg.trilinos_interface import solve_pressure_trilinos_from_scipy, solve_pressure_mltrilinos_from_scipy
-from pypnm.linalg.linear_system_solver import solve_pyamg
-from pypnm.linalg.trilinos_interface import matrix_scipy_to_epetra, vector_numpy_to_epetra
-import numpy as np
-from numpy.random import choice
+"""
+Implementation of gradient governed percolation from scratch using pypnm
+"""
 
 import cProfile
 import pstats
-import time
 
+import numpy as np
+from numpy.random import choice
+
+from pypnm.linalg.laplacianmatrix import laplacian_from_network
+from pypnm.linalg.petsc_interface import petsc_solve
+from pypnm.porenetwork.constants import WEST, EAST
+from pypnm.porenetwork.network_factory import structured_network
 from pypnm.util.hd5_output import add_field_to_hdf_file
 from pypnm.util.utils import require_path
 
@@ -34,6 +34,7 @@ def write_to_hdf(network, label, folder_name):
     add_field_to_hdf_file(filename, 0, "tube_r", network.tubes.r)
     add_field_to_hdf_file(filename, 0, "tube_l", network.tubes.l)
     add_field_to_hdf_file(filename, 0, "pore_vol", network.pores.vol)
+
 
 def get_interface_invasion_throats(network, pressure, entry_pressure, tube_conductances):
     pore_list_1 = network.edgelist[:, 0]
@@ -62,13 +63,13 @@ def get_interface_invasion_throats(network, pressure, entry_pressure, tube_condu
 
 
 def run():
-    network = structured_network(50, 50, 50)
+    network = structured_network(20, 20, 20)
     mu_w = 1.0
     mu_n = 0.1
     gamma = 1.0
     network.pores.invaded[network.pi_list_face[WEST]] = 1
     pressure = np.zeros(network.nr_p)
-    entry_pressure = 2 * gamma / network.tubes.r
+    entry_pressure   = 2 * gamma / network.tubes.r
 
     sf = 1.0e20
 
@@ -81,15 +82,7 @@ def run():
     try:
 
         for niter in xrange(100000):
-            # start = time.time()
-
             pressure = petsc_solve(A * sf, source * sf, x0=pressure, ksptype="minres", tol=1e-10)
-            # pressure = solve_pressure_trilinos_from_scipy(A*sf, source*sf, x0=pressure, tol=1e-7)
-            # pressure = solve_pyamg(A*sf, source*sf, x0=pressure, tol=1e-10)
-            # pressure = solve_pressure_mltrilinos_from_scipy(A*sf, source*sf, x0=pressure, tol=1e-10)
-
-            # end = time.time()
-            # print(end - start)
 
             displacing_tubes, prob = get_interface_invasion_throats(network, pressure, entry_pressure,
                                                                     tube_conductances)
@@ -115,7 +108,6 @@ def run():
                 print "Number of throats invaded:", niter
                 write_to_hdf(network, niter, "hdf5_output")
 
-
     except KeyboardInterrupt:
         pass
 
@@ -131,5 +123,3 @@ if __name__ == "__main__":
 
     cProfile.run(exec_string, 'restats')
     print_profiling_info('restats')
-
-

@@ -222,9 +222,6 @@ class PoreNetwork(object):
         mask_tubes = component.tube_mask_outside_bbox(self, bbox)
         self.tubes.vol[mask_tubes] = 0.0
 
-        print "Number of pores with volume set to zero:", np.sum(mask_pores)
-        print "Number of tubes with volume set to zero:", np.sum(mask_tubes)
-
     def _fix_tube_property(self, array, name):
         mean_val = array.mean(axis=0)
         idx = np.where(array == 0.0)
