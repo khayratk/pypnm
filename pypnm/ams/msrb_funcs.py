@@ -1,13 +1,16 @@
 import pymetis
+
 from PyTrilinos import Epetra
 from scipy.sparse import csr_matrix
-import numpy as np
-from pypnm.ams.msrsb import MSRSB
-from pypnm.linalg.trilinos_interface import matrix_scipy_to_epetra, vector_numpy_to_epetra
-from pypnm.multiscale.multiscale_unstructured import MultiScaleSimUnstructured
-from pypnm.util.igraph_utils import scipy_matrix_to_igraph, coarse_graph_from_partition, support_of_basis_function
 from scipy.sparse.csgraph import connected_components
+import numpy as np
+
+from pypnm.ams.msrsb import MSRSB
 from pypnm.linalg.laplacianmatrix import get_adjlist
+from pypnm.linalg.trilinos_interface import matrix_scipy_to_epetra, vector_numpy_to_epetra
+from pypnm.util.igraph_utils import scipy_matrix_to_igraph, coarse_graph_from_partition, support_of_basis_function
+
+from pypnm.multiscale.multiscale_unstructured import MultiScaleSimUnstructured
 
 
 def solve_multiscale(ms, A, b, tol=1e-5):
@@ -28,7 +31,7 @@ def partition_multicomponent_graph(A_scipy, v_per_subdomain=1000):
         A_sub = A_scipy[component_n, :][:, component_n]
         num_subpartitions = max(len(component_n) / v_per_subdomain, 2)
         _, labels_subpartition = pymetis.part_graph(num_subpartitions, get_adjlist(A_sub))
-        assert max(labels_subpartition)+1 == num_subpartitions
+        assert max(labels_subpartition) + 1 == num_subpartitions
         assert np.all(final_labels[component_n] == -1)
         final_labels[component_n] = np.asarray(labels_subpartition) + partition_ind_shift
 
@@ -37,6 +40,57 @@ def partition_multicomponent_graph(A_scipy, v_per_subdomain=1000):
     assert np.all(final_labels != -1), len((final_labels == -1).nonzero()[0])
 
     return partition_ind_shift, final_labels
+
+
+def solve_with_msrsb_compressible(ia, ja, a, b, tol=1e-5, v_per_subdomain=1000, cut_off=200, return_inds=False):
+    A = csr_matrix((a, ja, ia))
+    from scipy.sparse import dia_matrix
+    from collections import Counter
+
+    diagonal = dia_matrix(((A + A.T) * np.ones(A.shape[0]), [0]), shape=A.shape)
+    A_b = 0.5 * (A + A.T - diagonal)
+
+    num_components, v2components = connected_components(A_b)
+    component_sizes = Counter(v2components)
+    large_components = {component for component in component_sizes if component_sizes[component] > cut_off}
+
+    inds_in_large_components = list()
+    inds_in_small_components = list()
+    for v, label in enumerate(v2components):
+        if label in large_components:
+            inds_in_large_components.append(v)
+        else:
+            inds_in_small_components.append(v)
+
+    inds_in_large_components = np.asarray(inds_in_large_components)
+    inds_in_small_components = np.asarray(inds_in_small_components)
+
+    A_trunc = A[:, inds_in_large_components][inds_in_large_components, :]
+    A_trunc_b = A_b[:, inds_in_large_components][inds_in_large_components, :]
+
+    my_restriction_supports, my_basis_support = get_supports(A_trunc_b, v_per_subdomain)
+
+    A_b_trunc_epetra = matrix_scipy_to_epetra(A_trunc_b)
+    A_trunc_epetra = matrix_scipy_to_epetra(A_trunc)
+
+    ms = MSRSB(A_b_trunc_epetra, my_restriction_supports, my_basis_support)
+
+    ms.smooth_prolongation_operator(niter=100)
+
+    sol_trunc = Epetra.Vector(ms.A.RangeMap())
+    rhs_trunc = Epetra.Vector(ms.A.RangeMap())
+
+    rhs_trunc[:] = b[inds_in_large_components]
+    sol_trunc[:] = 0.0
+
+    sol_trunc = ms.iterative_solve(rhs_trunc, sol_trunc, tol=tol, max_iter=100, A=A_trunc_epetra)
+    sol = np.zeros_like(b)
+    sol[inds_in_large_components] = sol_trunc
+
+    if return_inds:
+        return sol, inds_in_large_components
+
+    return sol
 
 
 def solve_with_msrsb(ia, ja, a, rhs, tol=1e-3, v_per_subdomain=1000):
@@ -122,7 +176,6 @@ def get_supports(A_scipy, v_per_subdomain=1000):
     graph = scipy_matrix_to_igraph(A_scipy)
 
     num_subdomains = A_scipy.get_shape()[0] / v_per_subdomain
-
 
     # create global_id attributes before creating subgraphs.
     graph.vs["global_id"] = np.arange(graph.vcount())

@@ -1,5 +1,6 @@
 import copy
 import logging
+from pypnm.linalg.linear_system_solver import PressureSolverDynamicDirichlet, laplacian_from_network
 
 import numpy as np
 
@@ -7,13 +8,12 @@ from pypnm.attribute_calculators.conductance_calc import ConductanceCalc
 from pypnm.attribute_calculators.pc_computer import DynamicCapillaryPressureComputer
 from pypnm.flow_simulation.simulation import Simulation
 from pypnm.flow_simulation.simulation_bc import SimulationBoundaryCondition
-from pypnm.linalg.linear_system_solver import PressureSolverDynamicDirichlet, laplacian_from_network
-from pypnm.porenetwork.constants import NWETT, WETT
+
 from pypnm.porenetwork.pn_algorithms import update_pore_status, update_tube_piston_w, snapoff_all_tubes, \
     get_piston_disp_tubes, invade_tube_nw, get_piston_disp_tubes_wett, invade_tube_w
 from pypnm.porenetwork.pore_element_models import JNModel
 from pypnm.porenetwork.saturation_computer import DynamicSaturationComputer
-
+from pypnm.porenetwork.constants import NWETT, WETT
 
 from numpy.linalg import norm
 from pypnm.linalg.petsc_interface import get_petsc_ksp, petsc_solve_from_ksp
