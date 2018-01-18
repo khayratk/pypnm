@@ -1,5 +1,6 @@
 import copy
 import logging
+from pypnm.linalg.linear_system_solver import PressureSolverDynamicDirichlet, laplacian_from_network
 
 import numpy as np
 
@@ -7,13 +8,12 @@ from pypnm.attribute_calculators.conductance_calc import ConductanceCalc
 from pypnm.attribute_calculators.pc_computer import DynamicCapillaryPressureComputer
 from pypnm.flow_simulation.simulation import Simulation
 from pypnm.flow_simulation.simulation_bc import SimulationBoundaryCondition
-from pypnm.linalg.linear_system_solver import PressureSolverDynamicDirichlet, laplacian_from_network
-from pypnm.porenetwork.constants import NWETT, WETT
+
 from pypnm.porenetwork.pn_algorithms import update_pore_status, update_tube_piston_w, snapoff_all_tubes, \
     get_piston_disp_tubes, invade_tube_nw, get_piston_disp_tubes_wett, invade_tube_w
 from pypnm.porenetwork.pore_element_models import JNModel
 from pypnm.porenetwork.saturation_computer import DynamicSaturationComputer
-from sim_settings import sim_settings
+from pypnm.porenetwork.constants import NWETT, WETT
 
 from numpy.linalg import norm
 from pypnm.linalg.petsc_interface import get_petsc_ksp, petsc_solve_from_ksp
@@ -22,7 +22,7 @@ logger = logging.getLogger('pypnm')
 
 
 class DynamicSimulation(Simulation):
-    def __init__(self, network, sim_id=0):
+    def __init__(self, network, fluid_properties, sim_id=0):
         super(DynamicSimulation, self).__init__(network)
 
         if np.any(network.pores.vol <= 0.0):
@@ -31,6 +31,7 @@ class DynamicSimulation(Simulation):
         if np.any(network.tubes.vol != 0.0):
             raise ValueError("Network throats have to all have zero volume for dynamic flow solver")
 
+        self.fluid_properties = fluid_properties
         self.SatComputer = DynamicSaturationComputer
         self.bool_accounted_pores = np.ones(network.nr_p, dtype=np.bool)
         self.sat_comp = self.SatComputer(network, self.bool_accounted_pores)
@@ -39,12 +40,12 @@ class DynamicSimulation(Simulation):
         self.press_solver_type = "AMG"
 
         self.pc_comp = DynamicCapillaryPressureComputer(network)
-        self.k_comp = ConductanceCalc(network)
+        self.k_comp = ConductanceCalc(network, self.fluid_properties)
 
         self.rhs_source_nonwett = np.zeros(network.nr_p)  # right hand side contributions to the system of equations
         self.rhs_source_wett = np.zeros(network.nr_p)     # for solving the wetting pressure
 
-        gamma = sim_settings['fluid_properties']['gamma']
+        gamma = self.fluid_properties['gamma']
         self.snap_off_press = 1.001*JNModel.snap_off_pressure(gamma=gamma, r=network.tubes.r)
         self.piston_entry = JNModel.piston_entry_pressure(r=network.tubes.r, gamma=gamma, G=network.tubes.G)
 
@@ -187,7 +188,7 @@ class DynamicSimulation(Simulation):
             pi_dirichlet = ((self.rhs_source_nonwett + self.rhs_source_wett) == 0.0).nonzero()[0][0]
             press_solver.set_dirichlet_pores(pi_list=[pi_dirichlet], value=0.0)
 
-        logger.debug("Solving Pressure")
+        logger.debug("Solving Pressure with " + self.press_solver_type)
         self.network.pores.p_w[:] = press_solver.solve(self.press_solver_type)
 
         self.network.pores.p_n[:] = self.network.pores.p_w + self.network.pores.p_c
@@ -294,16 +295,19 @@ class DynamicSimulation(Simulation):
         sat = network.pores.sat
         pi_list_sink = self.bc.pi_list_w_sink
         pi_list_source = self.bc.pi_list_w_source
+        rhs_source_wett = self.rhs_source_wett
+        ngh_pores = network.ngh_pores
+        pi_nghs_of_w_sinks_interior = self.pi_nghs_of_w_sinks_interior
 
         # TODO: Above a certain threshold block a wetting sink using self.rhs_source_wett[pi] = 0.0
         for pi in pi_list_sink:
-            pi_nghs_interior = self.pi_nghs_of_w_sinks_interior[pi]
+            pi_nghs_interior = pi_nghs_of_w_sinks_interior[pi]
             if len(pi_nghs_interior) == 0:
-               pi_nghs_interior = network.ngh_pores[pi]
+               pi_nghs_interior = ngh_pores[pi]
             pc_max_ngh = max(p_c[pi_nghs_interior])  # For small arrays np.max is slow
 
             if (p_c[pi] > 1.5 * pc_max_ngh) and (sat[pi] > 0.9):  # Heuristic that can be improved
-                self.rhs_source_wett[pi] = 0.0
+                rhs_source_wett[pi] = 0.0
                 logger.debug("freezing W sink %d. p_c: %g. Max pc_ngh: %g. sat: %g", pi, p_c[pi], pc_max_ngh,  sat[pi])
 
         total_after_blockage = np.sum(self.rhs_source_wett[pi_list_sink])
@@ -337,7 +341,7 @@ class DynamicSimulation(Simulation):
         If no more sink pores are available, the source pores are adjusted.
         """
         network = self.network
-
+        sat = network.pores.sat
         pi_list_sink = self.bc.pi_list_nw_sink
         pi_list_source = self.bc.pi_list_nw_source
 
@@ -346,22 +350,24 @@ class DynamicSimulation(Simulation):
         if np.sum(self.q_n_tot_sink) == 0.0:
             return
 
+        freeze_sink_nw = self.freeze_sink_nw
+
         for pi in pi_list_sink:
 
             # Set a nonwetting sink to be frozen if it is completely filled with the wetting fluid.
             if network.pores.invaded[pi] == WETT:
                 rhs_source[pi] = 0.0
                 logger.debug("freezing NW sink %d", pi)
-                self.freeze_sink_nw[pi] = 1
+                freeze_sink_nw[pi] = 1
 
             # Set a nonwetting sink to be unfrozen if it surpasses a certain nonwetting threshold
-            if (self.freeze_sink_nw.setdefault(pi, 0) == 1) & (network.pores.sat[pi] > 0.5):
+            if (freeze_sink_nw.setdefault(pi, 0) == 1) & (sat[pi] > 0.5):
                 logger.debug("Unfreezing NW sink %d", pi)
-                self.freeze_sink_nw[pi] = 0
+                freeze_sink_nw[pi] = 0
 
             # Freeze a nonwetting sink.
-            if self.freeze_sink_nw.setdefault(pi, 0) == 1:
-                logger.debug("Setting NW sink to zero since it is marked as frozen. Its Saturation is %e" % network.pores.sat[pi])
+            if freeze_sink_nw.setdefault(pi, 0) == 1:
+                logger.debug("Setting NW sink to zero since it is marked as frozen. Its Saturation is %e" % sat[pi])
                 rhs_source[pi] = 0.0
 
         total_after_blockage = np.sum(self.rhs_source_nonwett[pi_list_sink])

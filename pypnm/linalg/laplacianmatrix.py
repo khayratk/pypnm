@@ -4,6 +4,25 @@ import numpy as np
 from scipy.sparse import csr_matrix, eye, coo_matrix, csc_matrix
 
 
+def get_adjlist(A):
+    """
+    Parameters
+    ----------
+    A: Scipy matrix
+
+    Returns
+    -------
+    adjacency list of equivalent undirected graph
+    """
+
+    A = A.tocsr()
+    indices = A.indices
+    indptr = A.indptr
+    adjlist = [filter(lambda x: x != i, indices[indptr[i]:indptr[i+1]].tolist()) for i in xrange(A.shape[0])]
+
+    return adjlist
+
+
 def _laplacian(edgelist, weights=None, ind_dirichlet=None):
     rows = edgelist[0]
     cols = edgelist[1]

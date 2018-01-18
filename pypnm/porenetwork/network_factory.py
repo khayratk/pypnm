@@ -1,7 +1,7 @@
 from pypnm.porenetwork.structured_porenetwork import StructuredPoreNetwork
 from pypnm.porenetwork.structured_porenetwork_27 import StructuredPoreNetwork27
 from pypnm.porenetwork.statoil_porenetwork import StatoilPoreNetwork
-from pypnm.porenetwork.network_manipulation import prune_network
+from pypnm.porenetwork.network_manipulation import prune_network, reorder_network
 from pypnm.porenetwork.unstructured_porenetwork import create_unstructured_network
 from pypnm.porenetwork.delaunay_network import create_delaunay_network
 from scipy.stats import beta, randint
@@ -29,6 +29,8 @@ def square_network(N):
 def structured_network(Nx, Ny, Nz, media_type="consolidated", periodic=False):
     dist_p2p = 160e-6
     network = StructuredPoreNetwork([Nx, Ny, Nz], dist_p2p, media_type=media_type, periodic=periodic)
+    network = reorder_network(network)  # Important for efficiency
+
     return network
 
 
@@ -61,7 +63,7 @@ def unstructured_network(nr_pores, domain_size=None, is_2d=False):
                                           pdf_tube_radius=pdf_tube_radius,
                                           pdf_coord_number=pdf_coord_number,
                                           domain_size=domain_size, is_2d=is_2d)
-
+    network = reorder_network(network)  # Important for efficiency
     return network
 
 
@@ -84,11 +86,11 @@ def unstructured_network_delaunay(nr_pores, domain_size=None, is_2d=False):
 
     network = create_delaunay_network(nr_pores, pdf_pore_radius=pdf_pore_radius,
                                       pdf_tube_radius=pdf_tube_radius, domain_size=domain_size, is_2d=is_2d)
+    network = reorder_network(network)  # Important for efficiency
     return network
 
 
-
-def network_from_statoil_file(filename, prune_window=[0.05, 0.95, 0.05, 0.95, 0.05, 0.95]):
+def network_from_statoil_file(filename, prune_window=(0.05, 0.95, 0.05, 0.95, 0.05, 0.95)):
     network = StatoilPoreNetwork(filename)
     network = prune_network(network, prune_window)
     return network

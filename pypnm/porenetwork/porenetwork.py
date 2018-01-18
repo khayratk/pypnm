@@ -222,9 +222,6 @@ class PoreNetwork(object):
         mask_tubes = component.tube_mask_outside_bbox(self, bbox)
         self.tubes.vol[mask_tubes] = 0.0
 
-        print "Number of pores with volume set to zero:", np.sum(mask_pores)
-        print "Number of tubes with volume set to zero:", np.sum(mask_tubes)
-
     def _fix_tube_property(self, array, name):
         mean_val = array.mean(axis=0)
         idx = np.where(array == 0.0)
@@ -379,6 +376,16 @@ class PoreNetwork(object):
         assert self.edgelist.shape[1] == 2
 
         self._create_helper_properties()
+
+    def rotate_around_z_axis(self, angle):
+        x, y, z = self.pores.x, self.pores.y, self.pores.z
+        x_center, y_center, z_center = np.mean(x), np.mean(y), np.mean(z)
+
+        x_r = x_center + (x - x_center) * np.cos(angle) - (y - y_center) * np.sin(angle)
+        y_r = y_center + (x - x_center) * np.sin(angle) + (y - y_center) * np.cos(angle)
+
+        self.pores.x[:] = x_r
+        self.pores.y[:] = y_r
 
     def restrict_volume(self, boundingbox_percent):
         """

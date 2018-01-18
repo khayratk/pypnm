@@ -44,7 +44,7 @@ def run_quasi_static(network):
 
 
 if __name__ == "__main__":
-    network = structured_network(60, 30, 30, media_type="consolidated", periodic=False)
+    network = structured_network(30, 15, 15, media_type="consolidated", periodic=False)
 
     # Hack: Needed to stop cooperative pore filling at inlet pores
     network.set_radius_pores(network.pi_in, np.max(network.pores.r) * 5)

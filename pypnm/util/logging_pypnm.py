@@ -5,7 +5,7 @@ from mpi4py import MPI
 my_id = MPI.COMM_WORLD.Get_rank()
 
 logger = logging.getLogger('pypnm')
-logger.setLevel(logging.WARN)
+logger.setLevel(logging.INFO)
 
 formatter = logging.Formatter('%(filename)s:%(lineno)s - %(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
@@ -17,6 +17,6 @@ formatter = logging.Formatter('%(filename)s:%(lineno)s - %(asctime)s - %(name)s 
 
 # create console handler
 ch = logging.StreamHandler()
-ch.setLevel(logging.WARNING)
+ch.setLevel(logging.DEBUG)
 ch.setFormatter(formatter)
 logger.addHandler(ch)

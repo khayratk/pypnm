@@ -5,7 +5,6 @@ from pypnm.porenetwork.constants import *
 from heapq import *
 
 sat_eps = 0.001
-from sim_settings import *
 
 
 class InvasionMechanism(object):
@@ -501,8 +500,5 @@ class InvasionPercolator(object):
             if self.intfc_t_snapoff and (self.pc_comp.p_c == -self.intfc_t_snapoff[0][0]):
                 sat_min_reached = False
 
-        gamma = sim_settings['fluid_properties']['gamma']
-        assert np.all(self.pc_comp.p_c >= gamma / tubes.r[tubes.connected == 1])
-        assert np.all(self.pc_comp.p_c >= gamma / pores.r[(pores.connected == 1) & (network.pore_domain_type != INLET)])
         return Snwc
 

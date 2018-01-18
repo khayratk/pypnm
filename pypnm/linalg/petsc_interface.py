@@ -18,6 +18,7 @@ def get_petsc_ksp(A, pctype="ilu", ksptype="gmres", tol=1e-5, max_it=10000):
     ksp.setOperators(petsc_mat)
     ksp.setType(ksptype)
     ksp.setTolerances(rtol=tol, max_it=max_it)
+    ksp.setFromOptions()
     pc = ksp.getPC()
     pc.setType(pctype)
     return ksp
@@ -36,12 +37,9 @@ def petsc_solve_ilu(A, rhs, x0=None, tol=1e-5, max_it=5):
     return x
 
 
-def petsc_solve_lu(A, rhs, x0=None):
+def petsc_solve_lu(A, rhs):
     petsc_rhs = PETSc.Vec().createWithArray(rhs)
-    if x0 is None:
-        petsc_sol = petsc_rhs.duplicate()
-    else:
-        petsc_sol = PETSc.Vec().createWithArray(x0)
+    petsc_sol = petsc_rhs.duplicate()
 
     ksp = get_petsc_ksp(A, pctype="lu", ksptype="richardson", max_it=1)
     ksp.solve(petsc_rhs, petsc_sol)

@@ -1,8 +1,9 @@
+import pyamg
+
 import logging
 import sys
 
 import numpy as np
-import pyamg
 from numpy.linalg import norm
 from scipy.sparse import csc_matrix
 from scipy.sparse.linalg import spsolve

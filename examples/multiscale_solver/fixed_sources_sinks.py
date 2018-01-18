@@ -1,7 +1,6 @@
 """
 This example sets up a dynamic two-phase flow simulation in a pore network using the approximate multiscale solver.
 The boundary conditions are set to be fixed nonwetting fluid source and fixed wetting fluid sinks.
-The simulation stops when breakthrough occurs.
 """
 
 from pypnm.porenetwork.constants import WEST, EAST
@@ -10,6 +9,12 @@ from pypnm.multiscale.multiscale_unstructured import MultiScaleSimUnstructured
 from pypnm.porenetwork.network_manipulation import remove_tubes_between_face_pores
 from PyTrilinos import Epetra
 from mpi4py import MPI
+
+from sim_settings import sim_settings
+import logging
+
+logger = logging.getLogger('pypnm')
+logger.setLevel("WARN")
 
 
 def multiscale_simulation():
@@ -22,7 +27,7 @@ def multiscale_simulation():
     # Processor 0 loads the network
     if my_id == 0:
         # Generate small unstructured network.
-        network = unstructured_network_delaunay(nr_pores=20000)
+        network = unstructured_network_delaunay(nr_pores=1000)
 
         # Remove pore throats between inlet and outlet pores. This is to avoid high pressure at the inlet
         network = remove_tubes_between_face_pores(network, EAST)
@@ -42,7 +47,7 @@ def multiscale_simulation():
     num_subnetworks = 20
 
     # Initialize solver
-    multiscale_sim = MultiScaleSimUnstructured(network, num_subnetworks)
+    multiscale_sim = MultiScaleSimUnstructured(network, sim_settings["fluid_properties"], num_subnetworks)
 
     # Set boundary conditions using list of pores and list of sources. Here a total inflow of q_total is used
     # distributed over the inlet and outlet pores
@@ -57,7 +62,7 @@ def multiscale_simulation():
 
     print "starting simulation"
     dt = 0.01*network_volume / q_total
-    print "time steps are", dt
+    print "time step is", dt
 
     for i in xrange(100):
         multiscale_sim.save()
