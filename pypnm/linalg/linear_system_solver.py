@@ -47,6 +47,38 @@ def _ref_residual_inf(A, rhs):
     return norm(rhs - A * (rhs / A.diagonal()), ord=np.inf)
 
 
+def solve_sparse_mat_mat_from_lu(lu, B):
+    B = B.tocsc()  # Convert to csc to extract columns efficiently
+
+    # Create a sparse output matrix by repeatedly applying
+    # the sparse factorization to solve columns of b.
+    # Adapted from scipy.sparse.linalg.dsolve.linsolve
+
+    ind_of_nonzero_cols = np.unique(B.nonzero()[1])
+
+    data_segs = []
+    row_segs = []
+    col_segs = []
+    for j in ind_of_nonzero_cols:
+        Bj = B[:, j].A.ravel()
+
+        xj = lu.solve(Bj)
+
+        w = np.flatnonzero(xj)
+        segment_length = w.shape[0]
+
+        row_segs.append(w)
+        col_segs.append(np.ones(segment_length, dtype=int) * j)
+        data_segs.append(np.asarray(xj[w], dtype=B.dtype))
+
+    sparse_data = np.concatenate(data_segs)
+    sparse_row = np.concatenate(row_segs)
+    sparse_col = np.concatenate(col_segs)
+    x = csc_matrix((sparse_data, (sparse_row, sparse_col)), shape=B.shape, dtype=B.dtype)
+
+    return x
+
+
 def solve_sparse_mat_mat_lu(A, B, solver="petsc"):
     """
     Solves AX=B for X
@@ -111,7 +143,7 @@ def solve_sparse_mat_mat_lu(A, B, solver="petsc"):
     sparse_data = np.concatenate(data_segs)
     sparse_row = np.concatenate(row_segs)
     sparse_col = np.concatenate(col_segs)
-    x = csc_matrix((sparse_data, (sparse_row, sparse_col)), shape=B.shape, dtype=A.dtype)
+    x = csc_matrix((sparse_data, (sparse_row, sparse_col)), shape=B.shape, dtype=B.dtype)
 
     return x
 
