@@ -458,6 +458,8 @@ class PoreNetwork(object):
             f['/tubes/vol'] = self.tubes.vol
             f['/tubes/clay_vol'] = self.tubes.vol*0.01
 
+
+
     def write_network_statistics(self, folder_name="network_statistics"):
         """
         Writes plots displaying statistics of the porenetwork into a folder
@@ -490,6 +492,15 @@ class PoreNetwork(object):
         filename: str
 
         """
+        import os
+        directory = os.path.dirname(filename)
+
+        try:
+            os.makedirs(directory)
+        except OSError:
+            if not os.path.isdir(directory):
+                raise
+
         output_file = open(filename, 'wb')
         pickle.dump(self, output_file, protocol=pickle.HIGHEST_PROTOCOL)
         output_file.close()
