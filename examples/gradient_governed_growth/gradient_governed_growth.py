@@ -11,29 +11,7 @@ from numpy.random import choice
 from pypnm.linalg.laplacianmatrix import laplacian_from_network
 from pypnm.linalg.petsc_interface import petsc_solve
 from pypnm.porenetwork.constants import WEST, EAST
-from pypnm.porenetwork.network_factory import structured_network
-from pypnm.util.hd5_output import add_field_to_hdf_file
-from pypnm.util.utils import require_path
-
-
-def write_to_hdf(network, label, folder_name):
-    require_path(folder_name)
-    filename = folder_name + "/hdf_net.h5"
-
-    add_field_to_hdf_file(filename, label, "p_n", network.pores.p_n)
-    add_field_to_hdf_file(filename, label, "pore_invaded", network.pores.invaded)
-    add_field_to_hdf_file(filename, label, "tube_invaded", network.tubes.invaded)
-
-    add_field_to_hdf_file(filename, 0, "G", network.pores.G)
-    add_field_to_hdf_file(filename, 0, "pore_r", network.pores.r)
-
-    add_field_to_hdf_file(filename, 0, "pore_x", network.pores.x)
-    add_field_to_hdf_file(filename, 0, "pore_y", network.pores.y)
-    add_field_to_hdf_file(filename, 0, "pore_z", network.pores.z)
-
-    add_field_to_hdf_file(filename, 0, "tube_r", network.tubes.r)
-    add_field_to_hdf_file(filename, 0, "tube_l", network.tubes.l)
-    add_field_to_hdf_file(filename, 0, "pore_vol", network.pores.vol)
+from pypnm.porenetwork.network_factory import unstructured_network_delaunay
 
 
 def get_interface_invasion_throats(network, pressure, entry_pressure, tube_conductances):
@@ -63,13 +41,13 @@ def get_interface_invasion_throats(network, pressure, entry_pressure, tube_condu
 
 
 def run():
-    network = structured_network(20, 20, 20)
+    network = unstructured_network_delaunay(100000, quasi_2d=True)
     mu_w = 1.0
     mu_n = 0.1
     gamma = 1.0
     network.pores.invaded[network.pi_list_face[WEST]] = 1
     pressure = np.zeros(network.nr_p)
-    entry_pressure   = 2 * gamma / network.tubes.r
+    entry_pressure = 2 * gamma / network.tubes.r
 
     sf = 1.0e20
 
@@ -101,12 +79,12 @@ def run():
 
             tube_conductances[ti_displaced] = g_12_new
 
-            if niter % 100 == 0:
+            if niter % 10000 == 0:
                 network.pores.p_n[:] = pressure
-                network.export_to_vtk("output_viscous" + str(niter).zfill(4))
+                #network.export_to_vtk("output_viscous" + str(niter).zfill(4))
 
                 print "Number of throats invaded:", niter
-                write_to_hdf(network, niter, "hdf5_output")
+                network.save("network_history/network"+str(niter).zfill(7)+".pkl")
 
     except KeyboardInterrupt:
         pass
