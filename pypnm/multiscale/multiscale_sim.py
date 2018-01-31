@@ -259,6 +259,45 @@ class MultiscaleSim(object):
         output_file = open(filename+"_proc"+str(comm.MyPID()), 'wb')
         pickle.dump(self, output_file, protocol=pickle.HIGHEST_PROTOCOL)
         output_file.close()
+        self.re_init()
+
+    def re_init(self):
+        self.comm = Epetra.PyComm()
+        self.mpicomm = MPI.COMM_WORLD
+
+        self.unique_map, self.nonunique_map, self.subgraph_ids_vec = self.create_maps(self.graph, self.comm)
+        self.epetra_importer = Epetra.Import(self.nonunique_map, self.unique_map)
+
+        unique_map = self.unique_map
+        nonunique_map = self.nonunique_map
+
+        self.p_c = Epetra.Vector(unique_map)
+        self.p_w = Epetra.Vector(unique_map)
+        self.sat = Epetra.Vector(unique_map)
+        self.global_source_wett = Epetra.Vector(unique_map)
+        self.global_source_nonwett = Epetra.Vector(unique_map)
+        self.out_flux_w = Epetra.Vector(unique_map)
+        self.out_flux_n = Epetra.Vector(unique_map)
+
+        self.p_c_with_ghost = Epetra.Vector(nonunique_map)
+        self.p_w_with_ghost = Epetra.Vector(nonunique_map)
+        self.sat_with_ghost = Epetra.Vector(nonunique_map)
+        self.global_source_nonwett_with_ghost = Epetra.Vector(nonunique_map)
+        self.out_flux_n_with_ghost = Epetra.Vector(nonunique_map)
+        self.p_c = self._update_pc_from_subnetworks(self.p_c, self.my_subnetworks)
+        ierr = self.p_c_with_ghost.Import(self.p_c, self.epetra_importer, Epetra.Insert)
+        assert ierr == 0
+
+        self.sat = self._update_sat_from_subnetworks(self.sat, self.my_subnetworks)
+        ierr = self.sat_with_ghost.Import(self.sat, self.epetra_importer, Epetra.Insert)
+
+        A = create_matrix(self.unique_map, ["k_n", "k_w"], self.my_subnetworks, self.inter_processor_edges,
+                          self.inter_subgraph_edges)
+
+        self.ms = MSRSB(A, self.my_subgraph_support, self.my_basis_support)
+        self.ms.smooth_prolongation_operator(A, tol=1.e-3)
+
+        assert ierr == 0
 
     @classmethod
     def load(cls, filename="multiscale_sim"):
@@ -275,40 +314,7 @@ class MultiscaleSim(object):
         ms = pickle.load(input_file)
         ms.comm = Epetra.PyComm()
         ms.mpicomm = MPI.COMM_WORLD
-
-        ms.unique_map, ms.nonunique_map, ms.subgraph_ids_vec = ms.create_maps(ms.graph, ms.comm)
-        ms.epetra_importer = Epetra.Import(ms.nonunique_map, ms.unique_map)
-
-        unique_map = ms.unique_map
-        nonunique_map = ms.nonunique_map
-
-        ms.p_c = Epetra.Vector(unique_map)
-        ms.p_w = Epetra.Vector(unique_map)
-        ms.sat = Epetra.Vector(unique_map)
-        ms.global_source_wett = Epetra.Vector(unique_map)
-        ms.global_source_nonwett = Epetra.Vector(unique_map)
-        ms.out_flux_w = Epetra.Vector(unique_map)
-        ms.out_flux_n = Epetra.Vector(unique_map)
-
-        ms.p_c_with_ghost = Epetra.Vector(nonunique_map)
-        ms.p_w_with_ghost = Epetra.Vector(nonunique_map)
-        ms.sat_with_ghost = Epetra.Vector(nonunique_map)
-        ms.global_source_nonwett_with_ghost = Epetra.Vector(nonunique_map)
-        ms.out_flux_n_with_ghost = Epetra.Vector(nonunique_map)
-        ms.p_c = cls._update_pc_from_subnetworks(ms.p_c, ms.my_subnetworks)
-        ierr = ms.p_c_with_ghost.Import(ms.p_c, ms.epetra_importer, Epetra.Insert)
-        assert ierr == 0
-
-        ms.sat = ms._update_sat_from_subnetworks(ms.sat, ms.my_subnetworks)
-        ierr = ms.sat_with_ghost.Import(ms.sat, ms.epetra_importer, Epetra.Insert)
-
-        A = create_matrix(ms.unique_map, ["k_n", "k_w"], ms.my_subnetworks, ms.inter_processor_edges,
-                          ms.inter_subgraph_edges)
-
-        ms.ms = MSRSB(A, ms.my_subgraph_support, ms.my_basis_support)
-        ms.ms.smooth_prolongation_operator(10)
-
-        assert ierr == 0
+        ms.re_init()
 
         return ms
 

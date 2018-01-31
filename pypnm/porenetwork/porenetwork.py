@@ -495,8 +495,10 @@ class PoreNetwork(object):
         import os
         directory = os.path.dirname(filename)
 
+
         try:
-            os.makedirs(directory)
+            if not directory == '':
+                os.makedirs(directory)
         except OSError:
             if not os.path.isdir(directory):
                 raise

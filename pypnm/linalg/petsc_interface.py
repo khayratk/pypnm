@@ -10,6 +10,8 @@ try:
 except ImportError:
     pass
 
+ksp_existing = dict()
+pc_existing = dict()
 
 def get_petsc_ksp(A, pctype="ilu", ksptype="gmres", tol=1e-5, max_it=10000):
     comm = MPI.COMM_SELF
@@ -47,7 +49,7 @@ def petsc_solve_lu(A, rhs):
     return x
 
 
-def petsc_solve(A, b, x0=None, tol=1e-5, ksptype="gmres"):
+def petsc_solve(A, b, x0=None, tol=1e-5, ksptype="gmres", pctype="ilu"):
     """
     Solves Ax=b using Petsc krylov-type iterative solver
 
@@ -70,7 +72,7 @@ def petsc_solve(A, b, x0=None, tol=1e-5, ksptype="gmres"):
     """
     comm = MPI.COMM_SELF  # Only works in serial
 
-    ksp = get_petsc_ksp(A, pctype="ilu", ksptype=ksptype, tol=tol)
+    ksp = get_petsc_ksp(A, pctype=pctype, ksptype=ksptype, tol=tol)
 
     petsc_rhs = PETSc.Vec().createWithArray(b, comm=comm)
 
@@ -80,6 +82,7 @@ def petsc_solve(A, b, x0=None, tol=1e-5, ksptype="gmres"):
         petsc_sol = PETSc.Vec().createWithArray(x0, comm=comm)
 
     ksp.setInitialGuessNonzero(True)
+    ksp.setFromOptions()
     ksp.solve(petsc_rhs, petsc_sol)
 
     return petsc_sol.getArray()

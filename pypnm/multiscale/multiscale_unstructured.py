@@ -354,7 +354,7 @@ class MultiScaleSimUnstructured(MultiscaleSim):
                           self.inter_subgraph_edges)
 
         self.ms = MSRSB(A, self.my_subgraph_support, self.my_basis_support)
-        self.ms.smooth_prolongation_operator(10)
+        self.ms.smooth_prolongation_operator(A, tol=1.e-3)
 
     def __solve_pressure(self, smooth_prolongator=True):
         A = create_matrix(self.unique_map, ["k_n", "k_w"], self.my_subnetworks, self.inter_processor_edges,

@@ -34,7 +34,7 @@ def partition_multicomponent_graph(A_scipy, v_per_subdomain=1000):
     return partition_ind_shift, final_labels
 
 
-def solve_with_msrsb(A_scipy, rhs, tol=1e-5, v_per_subdomain=1000, n_smooth=10, smoother="ilu", with_multiscale=True,
+def solve_with_msrsb(A_scipy, rhs, x0=None, tol=1e-5, v_per_subdomain=1000, n_smooth=10, smoother="ilu", with_multiscale=True,
                      conv_history=False, max_iter=200, tol_basis=1e-2, adapt_smoothing=True, verbose=False):
 
     A_epetra = matrix_scipy_to_epetra(A_scipy)
@@ -61,6 +61,10 @@ def solve_with_msrsb(A_scipy, rhs, tol=1e-5, v_per_subdomain=1000, n_smooth=10, 
     ms.smooth_prolongation_operator(A_b_epetra, max_iter=10000, tol=tol_basis)
 
     sol = Epetra.Vector(A_epetra.RangeMap())
+
+    if x0 is not None:
+        sol[:] = x0[:]
+
     sol, history = ms.iterative_solve(A_epetra, vector_numpy_to_epetra(rhs), sol, tol=tol, max_iter=max_iter,
                                       n_smooth=n_smooth, smoother=smoother, with_multiscale=with_multiscale,
                                       conv_history=True, adapt_smoothing=adapt_smoothing, verbose=verbose)

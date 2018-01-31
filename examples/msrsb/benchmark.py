@@ -1,5 +1,6 @@
 import numpy as np
-
+from petsc4py import PETSc
+from mpi4py import MPI
 from pypnm.ams.msrb_funcs import solve_with_msrsb
 from pypnm.attribute_calculators.conductance_calc import ConductanceCalc
 from pypnm.linalg.laplacianmatrix import LaplacianMatrix
@@ -50,10 +51,17 @@ def msrsb_two_phase():
     rhs[np.argmax(network.pores.x)] = -1e-10
     rhs += -An * p_c
 
-    sol, history = solve_with_msrsb(A, rhs, tol=1e-7, smoother="ilu", v_per_subdomain=100, conv_history=True,
-                                    with_multiscale=True, max_iter=10000, tol_basis=1e-3, n_smooth=80,
+    sol, history_gmres = solve_with_msrsb(A, rhs, tol=1e-6, smoother="gmres", v_per_subdomain=1000, conv_history=True,
+                                    with_multiscale=False, max_iter=10000, tol_basis=1e-3, n_smooth=100,
                                     adapt_smoothing=False, verbose=True)
-    print "converged in", len(history["residual"])
+
+    sol, history_gmres_ms = solve_with_msrsb(A, rhs, tol=1e-6, smoother="gmres", v_per_subdomain=1000, conv_history=True,
+                                    with_multiscale=True, max_iter=10000, tol_basis=1e-3, n_smooth=100,
+                                    adapt_smoothing=False, verbose=True)
+
+    sol, history_ilu_ms = solve_with_msrsb(A, rhs, tol=1e-6, smoother="ilu", v_per_subdomain=1000, conv_history=True,
+                                    with_multiscale=True, max_iter=10000, tol_basis=1e-3, n_smooth=10,
+                                    adapt_smoothing=False, verbose=True)
 
     A[1, :] = 0.0
     A[1, 1] = 1.0
@@ -67,10 +75,14 @@ def msrsb_two_phase():
     Linf = np.linalg.norm(error, ord=np.inf) / np.linalg.norm(sol_exact, ord=np.inf)
     L2_error = np.linalg.norm(error, ord=2) / np.linalg.norm(sol_exact, ord=2)
 
-    plt.semilogy(history["residual"])
+    plt.semilogy(history_gmres["residual"])
+    plt.semilogy(history_gmres_ms["residual"])
+    plt.semilogy(history_ilu_ms["residual"])
+
     plt.show()
 
     assert ((Linf < 10e-2) & (L2_error < 10e-5)), "L1 error: %s  L2 error: %s" % (Linf, L2_error)
+
 
 if __name__ == "__main__":
     msrsb_two_phase()

@@ -114,12 +114,17 @@ class MSRSB(object):
         assert np.all(a[:] == 1.0)
         return P
 
-    def smooth_prolongation_operator(self, A, max_iter=1000, tol=1.e-2):
+    def smooth_prolongation_operator(self, A, max_iter=1000, tol=1.e-2, verbose=False):
         """
         Parameters
         ----------
-        niter:
+        A: Epetra matrix
+
+        max_iter: integer
             Number of smoothing steps
+
+        verbose: bool
+            Flag to output convergence information
 
         Notes
         -----
@@ -161,7 +166,10 @@ class MSRSB(object):
             if error < tol:
                 break
 
-        logger.warn("Basis function error: %g. Number of iterations required: %d", error, iter_n)
+        logger.debug("Basis function error: %g. Number of iterations required: %d", error, iter_n)
+
+        if verbose:
+            print "Basis function error: %g. Number of iterations required: %d"%(error, iter_n)
 
         sum_cols_P = sum_of_columns(self.P)
 
@@ -201,7 +209,7 @@ class MSRSB(object):
         residual[:] = rhs[:] - residual[:]
         return residual
 
-    def iterative_solve(self, A, rhs, x0, tol=1.e-5, max_iter=200, n_smooth=5, smoother="gmres",
+    def iterative_solve(self, A, rhs, x0, tol=1.e-5, max_iter=200, n_smooth=10, smoother="gmres",
                         conv_history=False, with_multiscale=True, adapt_smoothing=True, verbose=False):
 
         history = dict()
@@ -298,10 +306,10 @@ class MSRSB(object):
             residual_prev_norm = residual.NormInf()
 
             history["n_smooth"].append(n_smooth)
-            history["residual"].append(residual_prev_norm)
+            history["residual"].append(residual_prev_norm[0]/ref_residual_norm)
 
             if verbose:
-                print iteration, residual_prev_norm[0]
+                print iteration, history["residual"][-1]
 
         residual = self.__compute_residual(A, rhs, x0, residual)
         error[:] = 0.0
@@ -314,7 +322,7 @@ class MSRSB(object):
         x0[:] += error[:]
 
         history["n_smooth"].append(n_smooth)
-        history["residual"].append(residual.NormInf())
+        history["residual"].append(residual.NormInf()[0] / ref_residual_norm)
 
         if conv_history:
             return x0, history
