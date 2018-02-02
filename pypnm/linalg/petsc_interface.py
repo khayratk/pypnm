@@ -13,11 +13,12 @@ except ImportError:
 ksp_existing = dict()
 pc_existing = dict()
 
+
 def get_petsc_ksp(A, pctype="ilu", ksptype="gmres", tol=1e-5, max_it=10000):
     comm = MPI.COMM_SELF
     petsc_mat = scipy_to_petsc_matrix(A)
     ksp = PETSc.KSP().create(comm=comm)
-    ksp.setOperators(petsc_mat)
+    ksp.setOperators(A=petsc_mat)
     ksp.setType(ksptype)
     ksp.setTolerances(rtol=tol, max_it=max_it)
     ksp.setFromOptions()
@@ -49,7 +50,7 @@ def petsc_solve_lu(A, rhs):
     return x
 
 
-def petsc_solve(A, b, x0=None, tol=1e-5, ksptype="gmres", pctype="ilu"):
+def petsc_solve(A, b, x0=None, tol=1.e-5, ksptype="minres", pctype="ilu"):
     """
     Solves Ax=b using Petsc krylov-type iterative solver
 

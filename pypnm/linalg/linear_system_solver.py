@@ -8,7 +8,7 @@ from numpy.linalg import norm
 from scipy.sparse import csc_matrix
 from scipy.sparse.linalg import spsolve
 
-from pypnm.linalg.laplacianmatrix import laplacian_from_network, LaplacianMatrix
+from pypnm.linalg.laplacianmatrix import LaplacianMatrix
 from pypnm.linalg.petsc_interface import get_petsc_ksp, petsc_solve_from_ksp, petsc_solve
 
 try:
@@ -286,30 +286,6 @@ class LinearSystemStandard(object):
         self.rhs.val[:] = - rhs_new
         self.rhs.val[pi_list] = value
 
-
-class LinearSystemSimple(object):
-    """
-    Simplified class to hold
-    """
-    def __init__(self, network, conductances, ind_dirichlet, val_dirichlet):
-        self.rhs = np.zeros(network.nr_p)
-        self.rhs[ind_dirichlet] = val_dirichlet
-        self.A = laplacian_from_network(network, conductances, ind_dirichlet)
-        self.sol = np.zeros(network.nr_p)
-
-    def solve(self, solver="LU", x0=None, tol=1e-5):
-        A = self.A
-
-        if solver == "LU":
-            self.sol = spsolve(A=A, b=self.rhs)
-
-        elif solver == "AMG":
-            self.sol = solve_pyamg(A=A, b=self.rhs, tol=tol, x0=x0)
-
-        elif solver == "PETSC":
-            self.sol = petsc_solve(A=A, b=self.rhs, tol=tol, x0=x0)
-
-        return self.sol
 
 
 class DynamicPressureSolverMethods(object):
