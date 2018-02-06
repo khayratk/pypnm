@@ -21,6 +21,7 @@ from pypnm.porenetwork.constants import WEST, EAST
 from pypnm.porenetwork.network_factory import unstructured_network_delaunay
 from pypnm.porenetwork.porenetwork import PoreNetwork
 
+
 def get_interface_invasion_throats(network, pressure, entry_pressure, tube_conductances):
     pore_list_1 = network.edgelist[:, 0]
     pore_list_2 = network.edgelist[:, 1]
