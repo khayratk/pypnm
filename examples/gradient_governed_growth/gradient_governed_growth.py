@@ -55,11 +55,12 @@ def run():
         network = PoreNetwork.load("benchmark_network.pkl")
 
     except IOError:
-        network = unstructured_network_delaunay(200000, quasi_2d=True)
+        #network = unstructured_network_delaunay(200000, quasi_2d=True)
+        network = unstructured_network_delaunay(50000, quasi_2d=True)
         network.save("benchmark_network.pkl")
 
     mu_w = 1.0
-    mu_n = 0.01
+    mu_n = 0.1
     gamma = 1.0
     network.pores.invaded[network.pi_list_face[WEST]] = 1
     pressure = np.zeros(network.nr_p)
@@ -132,6 +133,7 @@ def run():
                 network.save("network_history/network"+str(n_out).zfill(5)+".pkl")
                 s_target += ds_out
                 n_out += 1
+                network.export_to_vtk("test" + str(niter).zfill(3) + ".vtk")
 
             if niter % 10 == 0:
 

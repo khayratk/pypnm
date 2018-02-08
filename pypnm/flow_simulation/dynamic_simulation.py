@@ -1,7 +1,7 @@
 import copy
 import logging
-from pypnm.linalg.linear_system_solver import PressureSolverDynamicDirichlet, laplacian_from_network
-
+from pypnm.linalg.linear_system_solver import PressureSolverDynamicDirichlet
+from pypnm.linalg.laplacianmatrix import laplacian_from_network
 import numpy as np
 
 from pypnm.attribute_calculators.conductance_calc import ConductanceCalc

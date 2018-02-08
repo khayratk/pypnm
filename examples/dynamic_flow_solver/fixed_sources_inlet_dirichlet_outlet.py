@@ -19,7 +19,7 @@ logger.setLevel("WARN")
 
 def dynamic_simulation():
     # Generate small unstructured network.
-    network = unstructured_network_delaunay(nr_pores=2000)
+    network = unstructured_network_delaunay(100000, quasi_2d=True)
 
     # The implemented dynamic flow solver can only work with zero volume pore throats
     network.set_zero_volume_all_tubes()
@@ -57,13 +57,17 @@ def dynamic_simulation():
     simulation.add_vtk_output_tube_field(network.tubes.invaded, "Tube_invaded")
     simulation.write_vtk_output("initial_network")
 
-    for n in xrange(50):
+    for n in xrange(60):
         print ("TimeStep: %g" % delta_t_output)
         simulation.advance_in_time(delta_t=delta_t_output)
 
         simulation.write_vtk_output(label=n)
         simulation.write_to_hdf(label=n, folder_name="paraview_dyn_run")
+
+        network.save("network_history/network" + str(n).zfill(5) + ".pkl")
+
         print "Nonwetting saturation:", simulation.nonwetting_saturation()
+
 
 if  __name__=="__main__":
     dynamic_simulation()

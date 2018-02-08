@@ -1,7 +1,3 @@
-import sys
-import petsc4py
-from mpi4py import MPI
-
 import cProfile
 import pstats
 
@@ -9,10 +5,11 @@ import numpy as np
 
 from pypnm.linalg.laplacianmatrix import laplacian_from_network
 from pypnm.porenetwork.constants import WEST, EAST
-from pypnm.porenetwork.network_factory import unstructured_network_delaunay, structured_network
+from pypnm.porenetwork.network_factory import unstructured_network_delaunay
 from pypnm.porenetwork.porenetwork import PoreNetwork
-from scipy.sparse.linalg import spsolve
 from pypnm.linalg.petsc_interface import petsc_solve
+from pypnm.percolation import graph_algs
+from pypnm.porenetwork.component import tube_list_ngh_to_pore_list
 
 def compute_conductance(r, l, mu):
     return np.pi * (r ** 4) / (8. * l * mu)
@@ -51,6 +48,8 @@ def compute_timestep(network, flux_in_nw):
 def update_sat(network, flux_in_nw, dt):
     network.pores.sat[:] = network.pores.sat[:] + flux_in_nw / network.pores.vol * dt
     assert np.all(network.pores.sat >= -1e-10), np.min(network.pores.sat)
+    network.pores.sat[network.pores.sat < 0] = 0.0
+
     return network.pores.sat
 
 
@@ -88,10 +87,11 @@ def get_blocked_tubes(network, pressure, entry_pressure):
     pressure_drop_1 = pressure[pore_list_1] - pressure[pore_list_2]
     pressure_drop_2 = - pressure_drop_1
 
-    drain_criteria_1 = saturated_1 & (pressure_drop_1>0) & (pressure_drop_1 < entry_pressure) & (pores_invaded_1 == 1)
-    drain_criteria_2 = saturated_2 & (pressure_drop_2>0) & (pressure_drop_2 < entry_pressure) & (pores_invaded_2 == 1)
+    block_criteria_1 = saturated_1 & (pressure_drop_1 > 0) & (pressure_drop_1 < entry_pressure) & (pores_invaded_1 == 1)
+    block_criteria_2 = saturated_2 & (pressure_drop_2 > 0) & (pressure_drop_2 < entry_pressure) & (pores_invaded_2 == 1)
+    #block_criteria_3 = saturated_1 & saturated_2
 
-    intfc_tubes_mask = (drain_criteria_1 | drain_criteria_2) & (network.tubes.invaded == 0)
+    intfc_tubes_mask = (block_criteria_1 | block_criteria_2) & (network.tubes.invaded == 0)
     intfc_tubes = intfc_tubes_mask.nonzero()[0]
     return intfc_tubes
 
@@ -124,15 +124,15 @@ def run():
         network = PoreNetwork.load("benchmark_network.pkl")
 
     except IOError:
-        # network = unstructured_network_delaunay(2000, quasi_2d=True)
-        network = structured_network(50, 50, 5)
+        network = unstructured_network_delaunay(50000, quasi_2d=True)
+        #network = structured_network(50, 50, 5)
         network.save("benchmark_network.pkl")
 
     tubes = network.tubes
     pores = network.pores
 
     mu_w = 1.0
-    mu_n = 0.01
+    mu_n = 0.1
     gamma = 1.0
     network.pores.invaded[network.pi_list_face[WEST]] = 1
     network.pores.sat[:] = 0.0
@@ -146,14 +146,14 @@ def run():
 
     A = laplacian_from_network(network, weights=tube_conductances, ind_dirichlet=network.pi_list_face[EAST])
     source_n = np.zeros(network.nr_p)
-    source_n[network.pi_list_face[WEST]] = 1.e-8
+    source_n[network.pi_list_face[WEST]] = 1.e-7
     source = source_n
     outlet_pore_set = set(network.pi_list_face[EAST])
 
     pressure = np.zeros(network.nr_p)
     sf = 1e20
     try:
-        for niter in xrange(10000):
+        for niter in xrange(100000):
             pores.invaded[network.pi_list_face[WEST]] = 1
             pores.sat[network.pi_list_face[EAST]] = 0.0
 
@@ -222,6 +222,7 @@ def run():
             # Update saturation and all that
             flux_n = compute_nonwetting_flux(network, tube_conductances, pressure, source_n)
             dt = compute_timestep(network, flux_n)
+
             network.pores.sat = update_sat(network, flux_n, dt)
 
             sat_network = np.sum(network.pores.sat * network.pores.vol) / np.sum(network.pores.vol)
@@ -229,13 +230,14 @@ def run():
             if sat_network > s_target:
                 network.pores.p_n[:] = pressure
                 print "Number of throats invaded:", niter
-                # network.save("network_history/network"+str(n_out).zfill(5)+".pkl")
+                network.save("network_history/network"+str(n_out).zfill(5)+".pkl")
                 s_target += ds_out
                 n_out += 1
+                network.export_to_vtk("test" + str(niter).zfill(3) + ".vtk")
 
             if niter % 10 == 0:
                 print "saturation is:", sat_network
-                network.export_to_vtk("test" + str(niter).zfill(3) + ".vtk")
+
 
     except KeyboardInterrupt:
         pass
