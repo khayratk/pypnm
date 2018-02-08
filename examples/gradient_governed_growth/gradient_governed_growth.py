@@ -52,7 +52,7 @@ def run():
     comm = MPI.COMM_SELF
 
     try:
-        network = PoreNetwork.load("benchmark_network.pkl")
+        network = PoreNetwork.load("network_periodic.pkl")
 
     except IOError:
         #network = unstructured_network_delaunay(200000, quasi_2d=True)
@@ -133,7 +133,7 @@ def run():
                 network.save("network_history/network"+str(n_out).zfill(5)+".pkl")
                 s_target += ds_out
                 n_out += 1
-                network.export_to_vtk("test" + str(niter).zfill(3) + ".vtk")
+                network.export_to_vtk("test" + str(n_out).zfill(3))
 
             if niter % 10 == 0:
 
