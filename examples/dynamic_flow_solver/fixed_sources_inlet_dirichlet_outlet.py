@@ -7,11 +7,13 @@ The simulation stops when a domain saturation of 0.5 has been reached
 
 import numpy as np
 from pypnm.porenetwork.constants import WEST, EAST
-from pypnm.porenetwork.network_factory import unstructured_network_delaunay
+from pypnm.porenetwork.network_factory import unstructured_network_periodic_y
 from pypnm.flow_simulation.dynamic_simulation import DynamicSimulation
 from pypnm.flow_simulation.simulation_bc import SimulationBoundaryCondition
 from sim_settings import sim_settings
+from pypnm.porenetwork.component import tube_list_ngh_to_pore_list, pore_list_ngh_to_pore_list
 import logging
+from pypnm.porenetwork.network_manipulation import remove_tubes_between_face_pores
 
 logger = logging.getLogger('pypnm')
 logger.setLevel("WARN")
@@ -19,7 +21,17 @@ logger.setLevel("WARN")
 
 def dynamic_simulation():
     # Generate small unstructured network.
-    network = unstructured_network_delaunay(100000, quasi_2d=True)
+    network = unstructured_network_periodic_y(10000, quasi_2d=True)
+    network = remove_tubes_between_face_pores(network, EAST)
+    network = remove_tubes_between_face_pores(network, WEST)
+    pi_inlet = network.pi_list_face[WEST]
+
+    ti_list_inlet = np.unique(tube_list_ngh_to_pore_list(network, pi_inlet))
+    network.set_radius_tubes(ti_list_inlet, r= np.mean(network.tubes.r))
+    network.set_radius_pores(pi_inlet, r=np.mean(network.pores.r))
+    pi_inlet_ngh = np.unique(pore_list_ngh_to_pore_list(network, pi_inlet))
+    network.set_radius_pores(pi_inlet_ngh, r=np.mean(network.pores.r))
+    network._fix_tubes_larger_than_ngh_pores()
 
     # The implemented dynamic flow solver can only work with zero volume pore throats
     network.set_zero_volume_all_tubes()
@@ -57,7 +69,7 @@ def dynamic_simulation():
     simulation.add_vtk_output_tube_field(network.tubes.invaded, "Tube_invaded")
     simulation.write_vtk_output("initial_network")
 
-    for n in xrange(60):
+    for n in xrange(100):
         print ("TimeStep: %g" % delta_t_output)
         simulation.advance_in_time(delta_t=delta_t_output)
 

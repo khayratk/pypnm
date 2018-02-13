@@ -18,7 +18,7 @@ from numpy.random import choice
 from pypnm.linalg.laplacianmatrix import laplacian_from_network
 from pypnm.linalg.petsc_interface import  scipy_to_petsc_matrix
 from pypnm.porenetwork.constants import WEST, EAST
-from pypnm.porenetwork.network_factory import unstructured_network_delaunay
+from pypnm.porenetwork.network_factory import unstructured_network_delaunay, unstructured_network_periodic_y
 from pypnm.porenetwork.porenetwork import PoreNetwork
 
 
@@ -29,17 +29,20 @@ def get_interface_invasion_throats(network, pressure, entry_pressure, tube_condu
     pores_invaded_1 = network.pores.invaded[pore_list_1]
     pores_invaded_2 = network.pores.invaded[pore_list_2]
 
-    press_diff = pressure[pore_list_1] - pressure[pore_list_2]
+    pores_not_invaded_1 = 1-network.pores.invaded[pore_list_1]
+    pores_not_invaded_2 = 1-network.pores.invaded[pore_list_2]
 
-    intfc_tubes_mask = (pores_invaded_1 | pores_invaded_2) & (network.tubes.invaded == 0)
+    press_diff_1_2 = pressure[pore_list_1] - pressure[pore_list_2]
+
+    intfc_tubes_mask = ((pores_invaded_1 & pores_not_invaded_2) | (pores_invaded_2 & pores_not_invaded_1) ) & (network.tubes.invaded == 0)
     intfc_tubes = intfc_tubes_mask.nonzero()[0]
 
-    pressure_drop_1 = (pores_invaded_1 * press_diff - entry_pressure)
-    pressure_drop_2 = (pores_invaded_2 * (-press_diff) - entry_pressure)
-    pressure_drop = np.maximum(pressure_drop_1, pressure_drop_2) * tube_conductances
-    displacing_tubes = intfc_tubes[pressure_drop[intfc_tubes] > 0]
+    pressure_drop_1_2 = (pores_invaded_1 * press_diff_1_2 - entry_pressure)
+    pressure_drop_2_1 = (pores_invaded_2 * (-press_diff_1_2) - entry_pressure)
+    flux = np.maximum(pressure_drop_1_2, pressure_drop_2_1) * tube_conductances
+    displacing_tubes = intfc_tubes[flux[intfc_tubes] > 0]
 
-    prob = pressure_drop[displacing_tubes] / np.sum(pressure_drop[displacing_tubes])
+    prob = flux[displacing_tubes]/ np.sum(flux[displacing_tubes])
 
     if len(displacing_tubes) == 0:
         displacing_tubes = [intfc_tubes[np.argmax(network.tubes.r[intfc_tubes])]]
@@ -52,15 +55,14 @@ def run():
     comm = MPI.COMM_SELF
 
     try:
-        network = PoreNetwork.load("network_periodic.pkl")
+        network = PoreNetwork.load("benchmark_network.pkl")
 
     except IOError:
-        #network = unstructured_network_delaunay(200000, quasi_2d=True)
-        network = unstructured_network_delaunay(50000, quasi_2d=True)
+        network = unstructured_network_periodic_y(100000, quasi_2d=True)
         network.save("benchmark_network.pkl")
 
     mu_w = 1.0
-    mu_n = 0.1
+    mu_n = 10
     gamma = 1.0
     network.pores.invaded[network.pi_list_face[WEST]] = 1
     pressure = np.zeros(network.nr_p)
@@ -76,11 +78,12 @@ def run():
 
     A = laplacian_from_network(network, weights=tube_conductances, ind_dirichlet=network.pi_list_face[EAST])
     source = np.zeros(network.nr_p)
-    source[network.pi_list_face[WEST]] = 1.e-9
+    q_total = 1.e-6
+    source[network.pi_list_face[WEST]] = q_total/len(network.pi_list_face[WEST])
     outlet_pore_set = set(network.pi_list_face[EAST])
 
     ksp = PETSc.KSP().create(comm=comm)
-    ksp.setTolerances(rtol=1e-8, max_it=10000)
+    ksp.setTolerances(rtol=1e-10, max_it=10000)
     ksp.setType("minres")
     pc = ksp.getPC()
     pc.setType("gamg")
@@ -91,11 +94,11 @@ def run():
 
     change_list = []
     try:
-        for niter in xrange(4000000):
+        for niter in xrange(80000):
             petsc_mat = scipy_to_petsc_matrix(A*sf)
             _, P = ksp.getOperators()
 
-            if niter %10 == 0:
+            if niter %20 == 0:
                 P = petsc_mat
 
             ksp.setOperators(A=petsc_mat, P=P)
@@ -104,6 +107,7 @@ def run():
             ksp.solve(petsc_rhs, petsc_sol)
 
             pressure = petsc_sol.getArray()
+
 
             displacing_tubes, prob = get_interface_invasion_throats(network, pressure, entry_pressure,
                                                                     tube_conductances)
