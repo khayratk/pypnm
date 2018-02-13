@@ -73,6 +73,8 @@ class DynamicSimulation(Simulation):
 
         self.ti_freeze_displacement = dict()
 
+        self.cum_flux = np.zeros(network.nr_p)
+
     def reset_status(self):
         """
         Resets the saturation in all pores as well as invasion state of all pores and tubes to those at the
@@ -635,6 +637,8 @@ class DynamicSimulation(Simulation):
 
             logger.debug("Updating saturation")
             self.sat_comp.update_saturation(flux_n=self.flux_n, dt=dt, source_nonwett=self.rhs_source_nonwett)
+
+            self.cum_flux += (self.rhs_source_nonwett-self.flux_n)*dt
 
             #dt = self.__update_saturation_implicit(dt)
 
