@@ -33,7 +33,7 @@ class DynamicSimulation(Simulation):
 
         self.fluid_properties = fluid_properties
         self.SatComputer = DynamicSaturationComputer
-        self.bool_accounted_pores = np.ones(network.nr_p, dtype=np.bool)
+        self.bool_accounted_pores = np.ones(network.nr_p, dtype=np.bool)  # Saturation is updated only in these pores
         self.sat_comp = self.SatComputer(network, self.bool_accounted_pores)
 
         self.press_solver = PressureSolverDynamicDirichlet(self.network)

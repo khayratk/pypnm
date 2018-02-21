@@ -5,7 +5,7 @@ and fixed wetting pressure at the outlet.
 """
 
 from pypnm.porenetwork.constants import WEST, EAST
-from pypnm.porenetwork.network_factory import unstructured_network_delaunay
+from pypnm.porenetwork.network_factory import unstructured_network_periodic_y
 from pypnm.flow_simulation.dynamic_simulation import DynamicSimulation
 from pypnm.flow_simulation.simulation_bc import SimulationBoundaryCondition
 from sim_settings import sim_settings
@@ -17,7 +17,7 @@ logger.setLevel("WARN")
 
 def dynamic_simulation():
     # Generate small unstructured network.
-    network = unstructured_network_delaunay(nr_pores=2000)
+    network = unstructured_network_periodic_y(20000, quasi_2d=True)
 
     # The implemented dynamic flow solver can only work with zero volume pore throats
     network.set_zero_volume_all_tubes()
@@ -33,13 +33,13 @@ def dynamic_simulation():
     pi_inlet = network.pi_list_face[WEST]
     pi_outlet = network.pi_list_face[EAST]
 
-    bc.set_pressure_inlet(pi_list=pi_inlet, p_wett=2.e5, p_nwett=6.e5)
+    bc.set_pressure_inlet(pi_list=pi_inlet, p_wett=12.e5, p_nwett=16.e5)
     bc.set_pressure_outlet(pi_list=pi_outlet, p_wett=0.0)
 
     simulation.set_boundary_conditions(bc)
 
     # Set output-time interval for simulation
-    delta_t_output = 0.01
+    delta_t_output = 0.1
 
     #  Before starting simulation set up the postprocessor
 

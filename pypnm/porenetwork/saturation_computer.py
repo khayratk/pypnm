@@ -188,10 +188,10 @@ class DynamicSaturationComputer(QuasiStaticSaturationComputer):
     def __timestep_imbibition(self, dvn_dt):
         network = self.network
         pores = network.pores
-        dt_pc_diff_imbibe = dt_sat_w_double = dt_imbibe_pore = 1.0
+        dt_pc_diff_imbibe  = dt_imbibe_pore = 1.0
 
         mask_imbibition = (dvn_dt < 0.0) & self.accounted_pores
-        delta_pc = 0.02
+        delta_pc = 0.01
         if np.any(mask_imbibition):
             # Time step for emptying pore of nonwetting phase
             nwett_vol = pores.vol[mask_imbibition] * pores.sat[mask_imbibition]
@@ -205,7 +205,7 @@ class DynamicSaturationComputer(QuasiStaticSaturationComputer):
 
         dt_sat_w_double = 1.0
 
-        mask_pc_diff_criteria = (pores.sat > 0.8) & mask_imbibition
+        mask_pc_diff_criteria = (pores.sat > 0.6) & mask_imbibition
 
         if np.any(mask_pc_diff_criteria):
             # Criterion: capillary pressure is decreased by delta_pc
@@ -240,7 +240,7 @@ class DynamicSaturationComputer(QuasiStaticSaturationComputer):
         return dt_imb, {"pore_imbibe": dt_imbibe_pore}
 
     def __timestep_drainage(self, dvn_dt):
-        delta_pc = 0.02
+        delta_pc = 0.01
         dt_pore_drain = dt_sat_n_double = dt_sat_n_max = 1.0
 
         network = self.network

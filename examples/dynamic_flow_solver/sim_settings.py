@@ -7,3 +7,6 @@ sim_settings['fluid_properties']['mu_w'] = 1.0
 
 sim_settings['simulation'] = dict()
 sim_settings['simulation']['pores_have_conductances'] = False
+
+sim_settings['dynamic'] = dict()
+sim_settings['dynamic']['q_n_inlet'] = 1e-6

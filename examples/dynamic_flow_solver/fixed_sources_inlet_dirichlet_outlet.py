@@ -21,13 +21,13 @@ logger.setLevel("WARN")
 
 def dynamic_simulation():
     # Generate small unstructured network.
-    network = unstructured_network_periodic_y(10000, quasi_2d=True)
+    network = unstructured_network_periodic_y(2000, quasi_2d=True)
     network = remove_tubes_between_face_pores(network, EAST)
     network = remove_tubes_between_face_pores(network, WEST)
     pi_inlet = network.pi_list_face[WEST]
 
     ti_list_inlet = np.unique(tube_list_ngh_to_pore_list(network, pi_inlet))
-    network.set_radius_tubes(ti_list_inlet, r= np.mean(network.tubes.r))
+    network.set_radius_tubes(ti_list_inlet, r=np.mean(network.tubes.r))
     network.set_radius_pores(pi_inlet, r=np.mean(network.pores.r))
     pi_inlet_ngh = np.unique(pore_list_ngh_to_pore_list(network, pi_inlet))
     network.set_radius_pores(pi_inlet_ngh, r=np.mean(network.pores.r))
@@ -77,6 +77,7 @@ def dynamic_simulation():
         simulation.write_to_hdf(label=n, folder_name="paraview_dyn_run")
 
         network.save("network_history/network" + str(n).zfill(5) + ".pkl")
+        np.save("network_history/flux"+str(n).zfill(5), simulation.cum_flux)
 
         print "Nonwetting saturation:", simulation.nonwetting_saturation()
 

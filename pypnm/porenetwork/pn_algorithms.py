@@ -197,7 +197,7 @@ def update_pore_status(network, flux_n,  bool_accounted_pores=None, source_nonwe
     if bool_accounted_pores is None:
         bool_accounted_pores = np.ones(network.nr_p, dtype=np.bool)
 
-    pores_to_be_imbibed_mask = (pores.sat < sat_eps) & (dvn_dt<=0.0) & (pores.invaded==1) & bool_accounted_pores
+    pores_to_be_imbibed_mask = (pores.sat < sat_eps) & (dvn_dt <= 0.0) & (pores.invaded==1) & bool_accounted_pores
     pores_to_be_imbibed = np.flatnonzero(pores_to_be_imbibed_mask)
 
     for i in pores_to_be_imbibed:
