@@ -21,7 +21,7 @@ logger.setLevel("WARN")
 
 def dynamic_simulation():
     # Generate small unstructured network.
-    network = unstructured_network_periodic_y(2000, quasi_2d=True)
+    network = unstructured_network_periodic_y(4000, quasi_2d=True)
     network = remove_tubes_between_face_pores(network, EAST)
     network = remove_tubes_between_face_pores(network, WEST)
     pi_inlet = network.pi_list_face[WEST]
@@ -37,13 +37,13 @@ def dynamic_simulation():
     network.set_zero_volume_all_tubes()
 
     # Initialize solver
-    simulation = DynamicSimulation(network, sim_settings["fluid_properties"])
+    simulation = DynamicSimulation(network, sim_settings["fluid_properties"], explicit=True, delta_pc=0.01)
     simulation.press_solver_type = "petsc"
 
     # Set boundary conditions using list of pores and list of sources. Here a total inflow of q_total is used
     # distributed over the inlet and outlet pores
     bc = SimulationBoundaryCondition()
-    q_total = 1.e-8  # All units are SI units
+    q_total = 1.e-10  # All units are SI units
 
     pi_inlet = network.pi_list_face[WEST]
     pi_outlet = network.pi_list_face[EAST]

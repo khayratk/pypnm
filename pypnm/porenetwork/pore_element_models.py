@@ -26,7 +26,7 @@ class BasePEModel(object):
 
 class JNModel(BasePEModel):
     """
-    Implementation of local pc-sat model as given in Joekar-Niasar JFM (2010)
+    Implementation of local pc-sat pc_model as given in Joekar-Niasar JFM (2010)
     """
     @classmethod
     def pc_to_sat_func(cls, **kwargs):
@@ -65,7 +65,7 @@ class JNModel(BasePEModel):
 
 class ToraModel(BasePEModel):
     """
-    Implementation of local pc-sat model as given in Tora JFM (2012)
+    Implementation of local pc-sat pc_model as given in Tora JFM (2012)
     """
     @classmethod
     def pc_to_sat_func(cls, **kwargs):

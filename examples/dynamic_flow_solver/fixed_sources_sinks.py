@@ -11,27 +11,45 @@ from pypnm.flow_simulation.dynamic_simulation import DynamicSimulation
 from pypnm.flow_simulation.simulation_bc import SimulationBoundaryCondition
 from sim_settings import sim_settings
 import logging
-
+from pypnm.porenetwork.network_factory import unstructured_network_periodic_y
+from pypnm.porenetwork.network_manipulation import remove_tubes_between_face_pores
+from pypnm.porenetwork.component import tube_list_ngh_to_pore_list, pore_list_ngh_to_pore_list
+from pypnm.porenetwork.porenetwork import PoreNetwork
 logger = logging.getLogger('pypnm')
 logger.setLevel("WARN")
 
 
 def dynamic_simulation():
     # Generate small unstructured network.
-    network = unstructured_network_delaunay(nr_pores=2000)
 
-    # The implemented dynamic flow solver can only work with zero volume pore throats
-    network.set_zero_volume_all_tubes()
+    try:
+        network = PoreNetwork.load("network.pkl")
+    except:
+        network = unstructured_network_periodic_y(40000, quasi_2d=True)
+        network = remove_tubes_between_face_pores(network, EAST)
+        network = remove_tubes_between_face_pores(network, WEST)
+        pi_inlet = np.union1d(network.pi_list_face[WEST], network.pi_list_face[EAST])
+
+        ti_list_inlet = np.unique(tube_list_ngh_to_pore_list(network, pi_inlet))
+        network.set_radius_tubes(ti_list_inlet, r=np.mean(network.tubes.r))
+        network.set_radius_pores(pi_inlet, r=np.mean(network.pores.r))
+        pi_inlet_ngh = np.unique(pore_list_ngh_to_pore_list(network, pi_inlet))
+        network.set_radius_pores(pi_inlet_ngh, r=np.mean(network.pores.r))
+        network._fix_tubes_larger_than_ngh_pores()
+        # The implemented dynamic flow solver can only work with zero volume pore throats
+        network.set_zero_volume_all_tubes()
+
+        network.save("network.pkl")
 
     # Initialize solver
-    simulation = DynamicSimulation(network, sim_settings["fluid_properties"])
+    simulation = DynamicSimulation(network, sim_settings["fluid_properties"], explicit=True, delta_pc=0.1)
     simulation.press_solver_type = "petsc"
 
     # Set boundary conditions using list of pores and list of sources. Here a total inflow of q_total is used
     # distributed over the inlet and outlet pores
 
     bc = SimulationBoundaryCondition()
-    q_total = 1.e-8  # All units are SI units
+    q_total = 1.e-10  # All units are SI units
 
     pi_inlet = network.pi_list_face[WEST]
     pi_outlet = network.pi_list_face[EAST]

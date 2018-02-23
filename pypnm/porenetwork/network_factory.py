@@ -104,7 +104,7 @@ def unstructured_network_periodic_y(nr_pores, domain_size=None, quasi_2d=False):
         if quasi_2d:
             r_max = 75e-6
             domain_length = (4. / 3. * np.pi * r_max ** 3 * nr_pores) ** (1. / 3.)
-            domain_size = [4 * domain_length, 2*domain_length, domain_length/8.]
+            domain_size = [2 * domain_length, 2*domain_length, domain_length/4.]
         else:
             r_max = 75e-6
             domain_length = (4. / 3. * np.pi * r_max ** 3 * nr_pores) ** (1. / 3.)
