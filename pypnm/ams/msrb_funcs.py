@@ -13,6 +13,7 @@ from pypnm.multiscale.multiscale_unstructured import MultiScaleSimUnstructured
 from scipy.sparse import dia_matrix
 from scipy.sparse.linalg import norm
 
+
 def partition_multicomponent_graph(A_scipy, v_per_subdomain=1000):
     final_labels = -np.ones(A_scipy.shape[0], dtype=np.int)
     partition_ind_shift = 0

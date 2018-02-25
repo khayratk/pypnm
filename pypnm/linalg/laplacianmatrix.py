@@ -195,7 +195,7 @@ class LaplacianMatrix(object):
             Weights of the network edges
 
         Notes
-        _____
+        -----
         This is currently more efficient than using scipy's inbuilt functions.
 
         """

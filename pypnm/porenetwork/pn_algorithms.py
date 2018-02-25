@@ -4,7 +4,7 @@ import numpy as np
 
 logger = logging.getLogger('pypnm.pn_algorithms')
 
-sat_eps = 0.001
+eps_sat = 1e-3
 
 
 def get_piston_disp_tubes(network, entry_pressure, flux_n, source_nonwett=None):
@@ -64,7 +64,7 @@ def get_piston_disp_tubes_wett(network, entry_pressure, flux_n, source_nonwett=N
     pores_1 = network.edgelist[:, 0]
     pores_2 = network.edgelist[:, 1]
 
-    sat_crit = sat_eps
+    sat_crit = eps_sat
     sat_below_crit_1 = (sat[pores_1] < sat_crit)
     sat_below_crit_2 = (sat[pores_2] < sat_crit)
 
@@ -114,11 +114,11 @@ def invade_tube_w(network, k):
     network.tubes.invaded[k] = 0
     logger.debug("TUBE %d W INVADED by piston mechanism. Radius is %f", k, network.tubes.r[k])
 
-    if np.all(network.tubes.invaded[network.ngh_tubes[p1]] == 0) and (network.pores.sat[p1] < sat_eps):
+    if np.all(network.tubes.invaded[network.ngh_tubes[p1]] == 0) and (network.pores.sat[p1] < eps_sat):
         network.pores.invaded[p1] = 0
         logger.debug("Pore %d Invaded with wetting phase", p1)
 
-    if np.all(network.tubes.invaded[network.ngh_tubes[p2]] == 0) and (network.pores.sat[p2] < sat_eps):
+    if np.all(network.tubes.invaded[network.ngh_tubes[p2]] == 0) and (network.pores.sat[p2] < eps_sat):
         network.pores.invaded[p2] = 0
         logger.debug("Pore %d Invaded with wetting phase", p1)
 
@@ -181,7 +181,7 @@ def snapoff_all_tubes(network, pe_comp):
 
 def invade_pore_with_wett_phase(network, i):
     network.pores.invaded[i] = 0
-    network.pores.sat[i] = 0.0
+    # network.pores.sat[i] = 0.0
     network.tubes.invaded[network.ngh_tubes[i]] = 0
 
 
@@ -197,7 +197,7 @@ def update_pore_status(network, flux_n,  bool_accounted_pores=None, source_nonwe
     if bool_accounted_pores is None:
         bool_accounted_pores = np.ones(network.nr_p, dtype=np.bool)
 
-    pores_to_be_imbibed_mask = (pores.sat < sat_eps) & (dvn_dt <= 0.0) & (pores.invaded==1) & bool_accounted_pores
+    pores_to_be_imbibed_mask = (pores.sat < eps_sat) & (dvn_dt <= 0.0) & (pores.invaded == 1) & bool_accounted_pores
     pores_to_be_imbibed = np.flatnonzero(pores_to_be_imbibed_mask)
 
     for i in pores_to_be_imbibed:

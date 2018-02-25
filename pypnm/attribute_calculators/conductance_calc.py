@@ -1,7 +1,4 @@
 import numpy as np
-from pypnm.porenetwork.constants import *
-import math
-
 from pypnm.porenetwork.component import neighboring_edges_to_vertices
 
 
@@ -90,8 +87,8 @@ class ConductanceCalc(object):
         A_n[nw_mask] = (el_A_tot - A_w)[nw_mask]
 
         # Mean hydraulic radii
-        R_n = 0.5 * (el_rad + np.sqrt(A_n / math.pi))
-        R_w = 0.5 * (el_rad + np.sqrt(el_A_tot / math.pi))
+        R_n = 0.5 * (el_rad + np.sqrt(A_n / np.pi))
+        R_w = 0.5 * (el_rad + np.sqrt(el_A_tot / np.pi))
         assert np.all(R_n >= 0)
         assert np.all(R_w >= 0)
         assert np.all(el_pc[nw_mask] > gamma / el_rad[nw_mask])

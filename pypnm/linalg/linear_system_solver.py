@@ -287,7 +287,6 @@ class LinearSystemStandard(object):
         self.rhs.val[pi_list] = value
 
 
-
 class DynamicPressureSolverMethods(object):
     def create_flux_matrix(self, cond):
         matrix = self.laplacian
@@ -323,8 +322,8 @@ class DynamicPressureSolverMethods(object):
 class PressureSolverDynamicDirichlet(DynamicPressureSolverMethods):
     def __init__(self, network):
         self.network = network
-        self.laplacian = LaplacianMatrix(self.network)
-        self.csr_matrix = self.laplacian.get_csr_matrix()
+        self.rhs_matrix = LaplacianMatrix(self.network)
+        self.rhs_matrix_csr = self.rhs_matrix.get_csr_matrix()
         self.solver_matrix = LaplacianMatrix(self.network)
         self.csr_solver_matrix = self.solver_matrix.get_csr_matrix()
         self.rhs = np.zeros(network.nr_p)
@@ -339,8 +338,8 @@ class PressureSolverDynamicDirichlet(DynamicPressureSolverMethods):
             self.rhs[pi_list] = value
 
     def set_rhs(self, k_n, p_c):
-        self.laplacian.fill_csr_matrix_with_edge_weights(self.csr_matrix, k_n)
-        A = self.csr_matrix
+        self.rhs_matrix.fill_csr_matrix_with_edge_weights(self.rhs_matrix_csr, k_n)
+        A = self.rhs_matrix_csr
         self.rhs[:] = -(A * p_c)
 
     def setup_linear_system(self, k_n, k_w, p_c):

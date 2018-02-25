@@ -254,4 +254,3 @@ if __name__ == "__main__":
 
     cProfile.run(exec_string, 'restats')
     print_profiling_info('restats')
-    run()
