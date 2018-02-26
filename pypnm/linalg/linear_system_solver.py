@@ -289,9 +289,9 @@ class LinearSystemStandard(object):
 
 class DynamicPressureSolverMethods(object):
     def create_flux_matrix(self, cond):
-        matrix = self.laplacian
-        matrix.fill_csr_matrix_with_edge_weights(self.csr_matrix, cond)
-        return self.csr_matrix
+        matrix = self.rhs_matrix
+        matrix.fill_csr_matrix_with_edge_weights(self.rhs_matrix_csr, cond)
+        return self.rhs_matrix_csr
 
     def compute_nonwetting_flux(self):
         network = self.network
