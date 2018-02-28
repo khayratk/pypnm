@@ -2,10 +2,11 @@ import numpy as np
 
 from pypnm.flow_simulation.quasi_static_simulation import QuasiStaticSimulation
 from pypnm.porenetwork.network_factory import structured_network
+from sim_settings import sim_settings
 
 
 def run_quasi_static(network):
-    simulation = QuasiStaticSimulation(network)
+    simulation = QuasiStaticSimulation(network, sim_settings["fluid_properties"])
     simulation.apply_initial_conditions()
 
     # VTK post processing - To save space the user specifies which fields to output
@@ -22,25 +23,30 @@ def run_quasi_static(network):
         [np.linspace(0.0, 0.99, 50), np.linspace(0.99, 0.0, 50), np.linspace(0.0, 0.99, 50)])
 
     for n, sat in enumerate(saturation_points):
-        if n > 0:
-            if saturation_points[n] > saturation_points[n - 1]:
-                if simulation.sat_comp.sat_nw_conn() < saturation_points[n]:
-                    simulation.update_saturation_conn(sat)
-                else:
-                    continue
+        # If next step is supposed to be drainage and drainage is possible  then update saturation
+        if (n > 0) & (saturation_points[n] > saturation_points[n - 1]):
+            if simulation.sat_comp.sat_nw_conn() < saturation_points[n]:
+                simulation.update_saturation_conn(sat)
+            else:
+                continue
 
-            if saturation_points[n] < saturation_points[n - 1]:
-                if simulation.sat_comp.sat_nw_conn() > saturation_points[n]:
-                    simulation.update_saturation_conn(sat)
-                else:
-                    continue
+        # If next step is supposed to be imbibition and imbibition is possible  then update saturation
+        if (n > 0) & (saturation_points[n] < saturation_points[n - 1]):
+            if simulation.sat_comp.sat_nw_conn() > saturation_points[n]:
+                simulation.update_saturation_conn(sat)
+            else:
+                continue
 
         sat_nw_conn = simulation.get_nonwetting_connected_saturation()
         p_c_max = np.max(network.pores.p_c[network.pores.connected == 1])
         print ("Nonwetting connected saturation: %g, P_c: %g" %(sat_nw_conn, p_c_max))
 
-        output_filename = "ip" + str(n).zfill(8) + ".vtp"
+        K_r = simulation.relative_permeability()
+
+        print "relative_permeability", K_r
+        output_filename = "ip" + str(n).zfill(8)
         simulation.write_vtk_output(output_filename)
+        print "="*80
 
 
 if __name__ == "__main__":

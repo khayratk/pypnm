@@ -19,8 +19,9 @@ from pypnm.util.utils import require_path
 
 
 class Simulation(object):
-    def __init__(self, network):
+    def __init__(self, network, fluid_properties):
         self.network = network
+        self.fluid_properties = fluid_properties
 
         self._relperm_comp = None
         self.pe_comp = EntryPressureComputer()
@@ -64,26 +65,23 @@ class Simulation(object):
         self.network_pp = SubNetworkTightlyCoupled.from_bounding_box(self.network, bounding_box)
         self._sat_comp_pp = self.SatComputer(self.network_pp)
 
-    def get_relative_permeability(self):
-        self._relperm_comp = SimpleRelPermComputer(self.network)
-        self._relperm_comp.compute()
-        return self._relperm_comp.kr_n[0], self._relperm_comp.kr_w[0]
+    def relative_permeability(self, network=None):
+        if network is None:
+            network = self.network
+        self._relperm_comp = SimpleRelPermComputer(network, self.fluid_properties)
+        K_eff = self._relperm_comp.effective_nonwetting_permeability()
+        K = self.permeability()
+        return K_eff/K
 
-    def get_permeability(self):
-        self._relperm_comp = SimpleRelPermComputer(self.network)
-        assert self._relperm_comp.K > 0.0
-        return self._relperm_comp.K
+    def permeability(self):
+        self._relperm_comp = SimpleRelPermComputer(self.network, self.fluid_properties)
+        K = self._relperm_comp.absolute_permeability()
+        return K
 
     def get_relative_permeability_pp_window(self):
         assert self.network_pp is not None, "Post processing window bounds have not been defined"
-
-        if self._relperm_comp_pp is None:
-            self._relperm_comp_pp = SimpleRelPermComputer(self.network_pp)
-
         self.__sync_postprocessing_network()
-
-        self._relperm_comp_pp.compute()
-        return self._relperm_comp_pp.kr_n[0], self._relperm_comp_pp.kr_w[0]
+        return self.relative_permeability(self.network_pp)
 
     @staticmethod
     def __update_network_connectivity(network):

@@ -19,7 +19,6 @@ class SimpleRelPermComputer(object):
         self.total_flux_one_phase = None
         self.kr_n = np.zeros(3)
         self.kr_w = np.zeros(3)
-        self.K = 1.0e-8 * np.ones(3)
         self.is_isotropic = True
 
         # Mask of tubes and pores not connected to the inlet, which makes the matrix singular
@@ -29,7 +28,7 @@ class SimpleRelPermComputer(object):
         self.fluid_properties = fluid_properties
 
         self.cond_computer = ConductanceCalc(self.network, fluid_properties, pores_have_conductance)
-        self.compute_absolute_permeability()
+        self.absolute_permeability()
 
 
     def _general_absolute_permeability(self, coord, pi_inlet, pi_outlet):
@@ -92,18 +91,21 @@ class SimpleRelPermComputer(object):
         K_n[2] = self._general_effective_nonwetting_permeability(network.pores.z,
                                                         network.pi_list_face[BOTTOM], network.pi_list_face[TOP])
 
-        return K_n
+        return np.asarray(K_n)
 
-    def compute_absolute_permeability(self):
+    def absolute_permeability(self):
         network = self.network
+        K = [0]*3
 
-        self.K[0] = self._general_absolute_permeability(network.pores.x,
+        K[0] = self._general_absolute_permeability(network.pores.x,
                                                         network.pi_list_face[WEST], network.pi_list_face[EAST])
 
-        self.K[1] = self._general_absolute_permeability(network.pores.y,
+        K[1] = self._general_absolute_permeability(network.pores.y,
                                                         network.pi_list_face[SOUTH], network.pi_list_face[NORTH])
 
-        self.K[2] = self._general_absolute_permeability(network.pores.z,
+        K[2] = self._general_absolute_permeability(network.pores.z,
                                                         network.pi_list_face[BOTTOM], network.pi_list_face[TOP])
 
-        assert np.all(self.K > 0.0), self.K
+        assert np.all(K > 0.0), K
+
+        return np.asarray(K)

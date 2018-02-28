@@ -3,7 +3,7 @@ import numpy as np
 from porenetwork import PoreNetwork
 
 try:
-    from statoil_reader.statoil_reader import StatoilReader
+    from pypnm.io.statoil_reader import StatoilReader
 except ImportError:
     raise ImportError("Statoil reader not found")
 

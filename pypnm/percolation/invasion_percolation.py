@@ -285,7 +285,6 @@ class InvasionPercolator(object):
             if network.pores.connected[pi] == 1:
                 assert (network.pores.invaded[pi] == NWETT)
                 ngh_tubes = network.ngh_tubes[pi]
-
                 is_ngh_tubes_wett = np.any(network.tubes.invaded[ngh_tubes] == WETT)
                 is_ngh_tubes_nwett = np.any(network.tubes.invaded[ngh_tubes] == NWETT)
 

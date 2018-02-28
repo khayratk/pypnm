@@ -8,8 +8,7 @@ from pypnm.porenetwork.constants import WEST, EAST
 from pypnm.porenetwork.network_factory import unstructured_network_delaunay
 from pypnm.porenetwork.porenetwork import PoreNetwork
 from pypnm.linalg.petsc_interface import petsc_solve
-from pypnm.percolation import graph_algs
-from pypnm.porenetwork.component import tube_list_ngh_to_pore_list
+
 
 def compute_conductance(r, l, mu):
     return np.pi * (r ** 4) / (8. * l * mu)
@@ -124,8 +123,7 @@ def run():
         network = PoreNetwork.load("benchmark_network.pkl")
 
     except IOError:
-        network = unstructured_network_delaunay(50000, quasi_2d=True)
-        #network = structured_network(50, 50, 5)
+        network = unstructured_network_delaunay(5000, quasi_2d=True)
         network.save("benchmark_network.pkl")
 
     tubes = network.tubes
@@ -174,7 +172,6 @@ def run():
 
             pressure = petsc_solve(A * sf, source * sf, x0=pressure, tol=1e-10)
             network.pores.p_n[:] = pressure
-
 
             # Compute drained throats
             ti_list_drained = get_drained_tubes(network, pressure, entry_pressure)

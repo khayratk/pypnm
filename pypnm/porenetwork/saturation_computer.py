@@ -111,7 +111,7 @@ class SaturationComputer(object):
             pc_array = elements.p_c
         gamma = sim_settings['fluid_properties']['gamma']
 
-        sat_nw = self.model.pc_to_sat_func(r=elements.r, p_c=pc_array, gamma=gamma, G=elements.G, A_tot=elements.A_tot)
+        sat_nw = ToraModel.pc_to_sat_func(r=elements.r, p_c=pc_array, gamma=gamma, G=elements.G, A_tot=elements.A_tot)
 
         return sat_nw
 

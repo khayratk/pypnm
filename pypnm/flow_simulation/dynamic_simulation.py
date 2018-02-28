@@ -24,7 +24,7 @@ logger = logging.getLogger('pypnm')
 
 class DynamicSimulation(Simulation):
     def __init__(self, network, fluid_properties, explicit=True, delta_pc=0.01):
-        super(DynamicSimulation, self).__init__(network)
+        super(DynamicSimulation, self).__init__(network, fluid_properties)
 
         if np.any(network.pores.vol <= 0.0):
             raise ValueError("All pore volumes have to be positive")
