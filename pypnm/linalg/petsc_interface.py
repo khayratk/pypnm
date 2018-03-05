@@ -40,7 +40,7 @@ def petsc_solve_ilu(A, rhs, x0=None, tol=1e-5, max_it=5):
     return x
 
 
-def petsc_solve_lu(A, rhs):
+def petsc_solve_lu(A, rhs, x0=None):
     petsc_rhs = PETSc.Vec().createWithArray(rhs)
     petsc_sol = petsc_rhs.duplicate()
 
