@@ -60,7 +60,7 @@ def petsc_solve(A, b, x0=None, tol=1.e-5, ksptype="minres", pctype="ilu"):
     b: ndarray
     x0: ndarray, optional
         initial guess
-    tol: int, optional
+    tol: float, optional
         convergence tolerance
     ksptype: string, optional
         type of Krylov accelerator. eg. "bcgs", "gmres"

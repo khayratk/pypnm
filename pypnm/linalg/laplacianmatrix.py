@@ -61,9 +61,9 @@ def laplacian_from_network(network, weights=None, ind_dirichlet=None):
     Parameters
     ----------
     network: PoreNetwork
-    weights: ndarray, optional
+    weights: array_like, optional
         edge weights
-    ind_dirichlet, ndarray, optional
+    ind_dirichlet: array_like, optional
         indices of vertices where the corresponding rows in the laplacian
         will have single entries of 1.0 on the diagonal
 
