@@ -253,7 +253,7 @@ class DynamicSimulation(Simulation):
                 sat = (1-damping)*sat + damping * (network.pores.sat + (self.q_n - A_n * p_n) * dt / network.pores.vol)
                 if np.min(sat) < 0.0:
                     print "saturation undershoot decreasing time-step slightly"
-                    dt *= 0.95
+                    dt *= 0.5
 
                 if np.max(sat) > 1.0:
                     print "saturation overshoot"
@@ -453,6 +453,7 @@ class DynamicSimulation(Simulation):
             if ierr == -1:
                 STOP_FLAG = True
                 break
+
             self.__update_capillary_pressure()
 
             self.k_comp.compute()  # Side effect- Computes network.tubes.k_n and k_w

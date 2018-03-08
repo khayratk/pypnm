@@ -103,9 +103,8 @@ def get_drained_tubes(network, pressure, entry_pressure):
 
     drain_criteria_1 = saturated_1 & (pressure_drop_1 > entry_pressure) & (pores_invaded_1 == 1)
     drain_criteria_2 = saturated_2 & (pressure_drop_2 > entry_pressure) & (pores_invaded_2 == 1)
-    drain_criteria_3 = saturated_1 & saturated_2
 
-    intfc_tubes_mask = (drain_criteria_1 | drain_criteria_2 | drain_criteria_3) & ((network.tubes.invaded == 0) | (network.tubes.invaded==2))
+    intfc_tubes_mask = (drain_criteria_1 | drain_criteria_2) & ((network.tubes.invaded == 0) | (network.tubes.invaded==2))
     intfc_tubes = intfc_tubes_mask.nonzero()[0]
 
     potential = np.maximum(pressure_drop_1-entry_pressure, pressure_drop_2-entry_pressure)[intfc_tubes]
@@ -140,8 +139,9 @@ def get_blocked_tubes(network, pressure, entry_pressure):
 
     block_criteria_1 = saturated_1 & (pressure_drop_1 > 0) & (pressure_drop_1 < entry_pressure)
     block_criteria_2 = saturated_2 & (pressure_drop_2 > 0) & (pressure_drop_2 < entry_pressure)
+    block_criteria_3 = saturated_1 & saturated_2
 
-    intfc_tubes_mask = (block_criteria_1 | block_criteria_2) & (network.tubes.invaded == 0)
+    intfc_tubes_mask = (block_criteria_1 | block_criteria_2 | block_criteria_3) & (network.tubes.invaded == 0)
     intfc_tubes = intfc_tubes_mask.nonzero()[0]
 
     potential = np.maximum(pressure_drop_1-entry_pressure, pressure_drop_2-entry_pressure)[intfc_tubes]
@@ -229,8 +229,8 @@ def run():
         network = PoreNetwork.load("benchmark_network.pkl")
 
     except IOError:
-        network = unstructured_network_delaunay(10000, quasi_2d=True)
-        #network = structured_network(20, 50, 3)
+        # network = unstructured_network_delaunay(2000, quasi_2d=True)
+        network = structured_network(40, 20, 2)
         network.save("benchmark_network.pkl")
 
     tubes = network.tubes
@@ -275,6 +275,7 @@ def run():
             ti_drained = (tubes.invaded == 1).nonzero()[0]
             ti_imbibed = (tubes.invaded == 0).nonzero()[0]
             tube_conductances[:] = 0.0
+            tubes.invaded[tubes.invaded==2] = 0
             tube_conductances[ti_drained] = compute_conductance(tubes.r[ti_drained], tubes.l[ti_drained], mu_n)
             tube_conductances[ti_imbibed] = compute_conductance(tubes.r[ti_imbibed], tubes.l[ti_imbibed], mu_w)
 
@@ -315,11 +316,11 @@ def run():
 
                     # Compute blocked throats
                     ti_list_blocked = get_blocked_tubes(network, pressure, entry_pressure)
+                    print "num of blocked tubes", len(ti_list_blocked)
 
-                    for ti_blocked in ti_list_blocked[0:2*len(ti_list_blocked)/3+1]:
+                    for ti_blocked in ti_list_blocked:
                         tube_conductances[ti_blocked] = 0.0
                         tubes.invaded[ti_blocked] = 2
-                        print "blocked tube due to capillary:", ti_blocked
                         assert np.sum(network.pores.invaded[network.edgelist[ti_blocked]]) > 0
 
                     # If all interface pores are blocked, unlock one of them.

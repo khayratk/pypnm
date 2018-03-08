@@ -166,6 +166,12 @@ class InvasionPercolator(object):
         Snw = sat_comp.sat_nw()
         Snwc = sat_comp.sat_nw_conn()
 
+        if (Snwc > sat_max) and (target_type == CONNECTED):
+            return Snwc
+
+        if (Snw > sat_max) and (target_type == INVADED):
+            return Snw
+
         self.init_saturations()
 
         if restart:
@@ -205,7 +211,11 @@ class InvasionPercolator(object):
 
             self.push_ngh_wett_tubes_of_pore_to_drainage_heap(pi)
 
-        return Snwc
+        if target_type == CONNECTED:
+            return Snwc
+
+        if target_type == INVADED:
+            return Snw
 
     def invasion_percolation_imbibition(self, sat_min, restart=True, target_type=CONNECTED):
         """ Runs the invasion percolation algorithm  with trapping and snap-offs
@@ -225,8 +235,11 @@ class InvasionPercolator(object):
         Snw = sat_comp.sat_nw()
         Snwc = sat_comp.sat_nw_conn()
 
-        if Snw < sat_min:
-            return
+        if (Snwc < sat_min) and (target_type == CONNECTED):
+            return Snwc
+
+        if (Snw < sat_min) and (target_type == INVADED):
+            return Snw
 
         def update_connectivity_from_pores(network, pore_list):
             """Updates connectivity of pores and tubes given a list
@@ -499,5 +512,8 @@ class InvasionPercolator(object):
             if self.intfc_t_snapoff and (self.pc_comp.p_c == -self.intfc_t_snapoff[0][0]):
                 sat_min_reached = False
 
-        return Snwc
+        if target_type == CONNECTED:
+            return Snwc
+        elif target_type == INVADED:
+            return Snw
 

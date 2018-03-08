@@ -4,7 +4,7 @@ import numpy as np
 
 logger = logging.getLogger('pypnm.pn_algorithms')
 
-eps_sat = 1e-3
+eps_sat = 1e-2
 
 
 def get_piston_disp_tubes(network, entry_pressure, flux_n, source_nonwett=None):

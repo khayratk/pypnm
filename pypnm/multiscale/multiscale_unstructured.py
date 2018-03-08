@@ -31,7 +31,8 @@ class MultiScaleSimUnstructured(MultiscaleSim):
     subgraph_ids: numpy array, optional
         Integer array of length network.nr_p containing the partition of the network.
     """
-    def __init__(self, network,  fluid_properties, num_subnetworks, comm=None, mpicomm=None, subgraph_ids=None):
+    def __init__(self, network,  fluid_properties, num_subnetworks, comm=None, mpicomm=None, subgraph_ids=None,
+                 delta_s_max=0.01):
         self.network = network
 
         if comm is None:
@@ -164,7 +165,7 @@ class MultiScaleSimUnstructured(MultiscaleSim):
             pc_comp = DynamicCapillaryPressureComputer(self.my_subnetworks[i])
             pc_comp.compute()
 
-        self.delta_s_max = 0.01
+        self.delta_s_max = delta_s_max
         self.p_tol = 1.e-6
         self.time = 0.0
         self.stop_time = None

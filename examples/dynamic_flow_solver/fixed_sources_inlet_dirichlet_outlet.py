@@ -41,7 +41,7 @@ def dynamic_simulation():
     network.set_zero_volume_all_tubes()
 
     # Initialize solver
-    simulation = DynamicSimulation(network, sim_settings["fluid_properties"], explicit=True, delta_pc=0.01)
+    simulation = DynamicSimulation(network, sim_settings["fluid_properties"], explicit=False, delta_pc=0.01)
     simulation.press_solver_type = "petsc"
 
     # Set boundary conditions using list of pores and list of sources. Here a total inflow of q_total is used

@@ -2,7 +2,7 @@ import numpy as np
 
 from porenetwork import PoreNetwork
 
-from pypnm.io.statoil_reader import StatoilReader
+from pypnm.io_network.statoil_reader import StatoilReader
 
 from pores import Pores
 from tubes import Tubes
