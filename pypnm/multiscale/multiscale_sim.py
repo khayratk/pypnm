@@ -25,7 +25,6 @@ except ImportError:
     sim_settings["fluid_properties"]['gamma'] = 1.0
 
 
-
 def require_path(path):
     try:
         os.makedirs(path)
@@ -57,14 +56,13 @@ def reduce_dictionary_values(key_to_scalar_distributed, mpicomm):
 
 def _create_subnetworks(network, subgraph_ids, coarse_graph, mpicomm):
     """
-    Create subnetworks for each processor given a network and partition information.
+    Create subnetworks for each processor given a pore network and partition information.
 
     Parameters
     ----------
     network: Porenetwork
-        Porenetwork from which subnetworks will be created from
-    subgraph_ids: integer ndarray
-        Vertex attribute assigning each vertex in Porenetwork to a subgraph index
+    subgraph_ids: ndarray
+        mapping from vertex id to a subgraph id
     coarse_graph: igraph
         Graph consisting of subnetworks as vertices, with edges present between two subnetworks if they are adjacent.
         Course_graph must have a [proc_id] property
@@ -86,6 +84,7 @@ def _create_subnetworks(network, subgraph_ids, coarse_graph, mpicomm):
         indices_of_subgraph = defaultdict(list)
         for i, subgraph_id in enumerate(subgraph_ids):
             indices_of_subgraph[subgraph_id].append(i)
+
         indices_of_subgraph = dict(indices_of_subgraph)
 
         for dest_id in xrange(num_proc):
@@ -94,7 +93,8 @@ def _create_subnetworks(network, subgraph_ids, coarse_graph, mpicomm):
                 if proc_ids[i] == dest_id:
                     pi_list = indices_of_subgraph[i]
                     send_dict[i] = SubNetwork(network, pi_list)
-                    assert len(network_to_igraph(send_dict[i]).components()) == 1
+                    n_components = len(network_to_igraph(send_dict[i]).components())
+                    assert n_components == 1, n_components
 
             if dest_id == 0:
                 my_subnetworks = send_dict
@@ -116,16 +116,16 @@ def _create_inter_subgraph_edgelist(graph, my_subgraph_ids, mpicomm):
     ----------
     graph: igraph
         Distributed graph with "global_id" attribute to uniquely identify vertices
-    my_subgraph_ids: numpy.ndarray
+    my_subgraph_ids: array_like
         List of subgraph ids  belonging to this processor.
-    my_id:
-        The id of this processor.
+    mpicomm: mpi4py communicator
+
     Returns
     -------
     inter_subgraph_edges: dict
         Dictionary with several keys which completely specify the pore throats as well as adjacent pore bodies.
-
     """
+
     my_id = mpicomm.rank
     subgraph_id = graph.vs["subgraph_id"]
     global_id = np.asarray(graph.vs["global_id"], dtype=np.int32)

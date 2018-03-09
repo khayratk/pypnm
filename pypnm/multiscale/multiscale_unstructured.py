@@ -23,7 +23,10 @@ class MultiScaleSimUnstructured(MultiscaleSim):
     """
     Parameters
     ----------
+
     network: PoreNetwork
+    fluid_properties: dict
+        Dictionary containing entries "mu_n", "mu_w" and "gamma" used to compute the conductances of the pore throats
     num_subnetworks: int
         Number of subnetworks to split up network
     comm: Epetra communicator, optional
@@ -49,7 +52,11 @@ class MultiScaleSimUnstructured(MultiscaleSim):
 
         self.num_subnetworks = num_subnetworks
 
-        # Create graph corresponding to network and another coarser graph with its vertices corresponding to subnetworks
+        # On the master cpu do the following:
+        # 1) Create graph corresponding to pore network.
+        # 2) Partition the graph into subgraphs
+        # 3) Create a coarse graph with the subgraphs as the nodes
+        # 4) Use the coarse graph to assign each subgraph to a processor
         if my_id == 0:
             self.graph = network_to_igraph(network, edge_attributes=["l", "A_tot", "r", "G"])
 
@@ -74,9 +81,9 @@ class MultiScaleSimUnstructured(MultiscaleSim):
             self.graph.vs["proc_id"] = [subgraph_id_to_proc_id[v["subgraph_id"]] for v in self.graph.vs]
 
         if my_id != 0:
-            network = None
-            self.graph = None
             coarse_graph = None
+            self.graph = None
+            network = None
             subgraph_ids = None
 
         self.coarse_graph = self.mpicomm.bcast(coarse_graph, root=0)
@@ -132,7 +139,6 @@ class MultiScaleSimUnstructured(MultiscaleSim):
                                                              self.subgraph_id_to_v_center_id, self.my_subgraph_support_with_ghosts)
 
             self.my_basis_support[i] = np.intersect1d(support_vertices, my_global_elements).astype(np.int32)
-
 
         # Create distributed arrays - Note: Memory wasted here by allocating extra arrays which include ghost cells.
         # This can be optimized but the python interface for PyTrilinos is not documented well enough.
@@ -378,8 +384,8 @@ class MultiScaleSimUnstructured(MultiscaleSim):
         comm = self.comm
         epetra_importer = self.epetra_importer
         simulations = self.simulations
-
         self.stop_time = self.time + delta_t
+
         while True:
             sat_current = _network_saturation(self.my_subnetworks, self.mpicomm)
             logger.info("Current Saturation of Complete Network: %g", sat_current)
@@ -553,6 +559,8 @@ class MultiScaleSimUnstructured(MultiscaleSim):
 
             logger.info("time is %g", self.time)
             logger.info("stop time is %g", self.stop_time)
+
+            print "Current simulation time", self.time
 
             if np.isclose(self.time, self.stop_time):
                 break

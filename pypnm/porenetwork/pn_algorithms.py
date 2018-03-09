@@ -7,7 +7,7 @@ logger = logging.getLogger('pypnm.pn_algorithms')
 eps_sat = 1e-2
 
 
-def get_piston_disp_tubes(network, entry_pressure, flux_n, source_nonwett=None):
+def get_piston_disp_tubes_nonwett(network, entry_pressure, flux_n, source_nonwett=None):
     p_c = network.pores.p_c
     sat = network.pores.sat
 
@@ -35,9 +35,9 @@ def get_piston_disp_tubes(network, entry_pressure, flux_n, source_nonwett=None):
     outward_wetting_flux_1 = (dvn_dt[pores_1] > 0.0)
     outward_wetting_flux_2 = (dvn_dt[pores_2] > 0.0)
 
-    condition1 = pc_above_pe_1 & sat_above_crit_1 & outward_wetting_flux_1 & pc_diff_above_pe_1
+    condition1 = pc_above_pe_1 & sat_above_crit_1 & pc_diff_above_pe_1 & outward_wetting_flux_1
 
-    condition2 = pc_above_pe_2 & sat_above_crit_2 & outward_wetting_flux_2 & pc_diff_above_pe_2
+    condition2 = pc_above_pe_2 & sat_above_crit_2 & pc_diff_above_pe_2 & outward_wetting_flux_2
 
     condition3 = pc_above_pe_1 & pc_above_pe_2 & sat_above_crit_1 & sat_above_crit_2
 

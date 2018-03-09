@@ -10,7 +10,7 @@ from pypnm.flow_simulation.simulation import Simulation
 from pypnm.flow_simulation.simulation_bc import SimulationBoundaryCondition
 
 from pypnm.porenetwork.pn_algorithms import update_pore_status, update_tube_piston_w, snapoff_all_tubes, \
-    get_piston_disp_tubes, invade_tube_nw, get_piston_disp_tubes_wett, invade_tube_w
+    get_piston_disp_tubes_nonwett, invade_tube_nw, get_piston_disp_tubes_wett, invade_tube_w
 from pypnm.porenetwork.pore_element_models import JNModel
 from pypnm.porenetwork.saturation_computer import DynamicSaturationComputer
 from time_stepper import DynamicTimeStepper
@@ -245,11 +245,11 @@ class DynamicSimulation(Simulation):
                 if iter == 0:
                     damping = 1
                 if iter > 0:
-                    damping = 0.5
-                if iter > 10:
-                    damping = 0.2
-                if iter > 20:
                     damping = 0.1
+                if iter > 10:
+                    damping = 0.05
+                if iter > 20:
+                    damping = 0.025
                 sat = (1-damping)*sat + damping * (network.pores.sat + (self.q_n - A_n * p_n) * dt / network.pores.vol)
                 if np.min(sat) < 0.0:
                     print "saturation undershoot decreasing time-step slightly"
@@ -498,23 +498,19 @@ class DynamicSimulation(Simulation):
             snapoff_all_tubes(network, pe_comp)
 
             logger.debug("Computing Conductances")
-            k_comp.compute()  # Side effect- Computes network.tubes.k_n and k_w
+            k_comp.compute()  # Side effect - Computes network.tubes.k_n and k_w
             # Set source and sink arrays
             self.__set_rhs_source_arrays(self.bc)
 
             ierr = self.__adjust_magnitude_sink_pores(WETT)
             if ierr == -1:
+                print "cannot adjust wetting sinks"
                 return ierr
 
             ierr = self.__adjust_magnitude_sink_pores(NWETT)
             if ierr == -1:
+                print "cannot adjust nonwetting sinks"
                 return ierr
-
-            if self.bc.no_dirichlet:
-                logger.debug("There is no dirichlet boundary condition specified. Checking if sources are zero")
-
-                if np.sum(self.q_w) == 0 and np.sum(self.q_n) == 0:
-                    return -1
 
             self.__solve_linear_system()
             self.__invade_nonwetting_source_pores()
@@ -554,11 +550,11 @@ class DynamicSimulation(Simulation):
             if not is_event:
                 break
 
-        ti_piston_nonwett = get_piston_disp_tubes(network, self.piston_entry, self.flux_n, self.q_n)
+        ti_piston_nonwett = get_piston_disp_tubes_nonwett(network, self.piston_entry, self.flux_n, self.q_n)
         ti_piston_nonwett = set(ti_piston_nonwett) - set(self.ti_freeze_displacement.keys())
 
         if len(ti_piston_nonwett) == 0:
-            ti_piston_nonwett = get_piston_disp_tubes(network, self.piston_entry, self.flux_n, self.q_n)
+            ti_piston_nonwett = get_piston_disp_tubes_nonwett(network, self.piston_entry, self.flux_n, self.q_n)
 
         for ti_nonwett in ti_piston_nonwett:
             invade_tube_nw(network, ti_nonwett)

@@ -42,7 +42,7 @@ def multiscale_simulation(restart):
                 network = PoreNetwork.load("benchmark_network.pkl")
 
             except IOError:
-                network = unstructured_network_delaunay(nr_pores=100000)
+                network = unstructured_network_delaunay(nr_pores=10000)
                 # Remove pore throats between inlet and outlet pores. This is to avoid high pressure at the inlet
                 network = remove_tubes_between_face_pores(network, EAST)
                 network = remove_tubes_between_face_pores(network, WEST)
@@ -63,7 +63,8 @@ def multiscale_simulation(restart):
         num_subnetworks = 20
 
         # Initialize solver
-        multiscale_sim = MultiScaleSimUnstructured(network, sim_settings["fluid_properties"], num_subnetworks)
+        multiscale_sim = MultiScaleSimUnstructured(network, sim_settings["fluid_properties"], num_subnetworks,
+                                                   delta_s_max=0.001)
 
         # Set boundary conditions using list of pores and list of sources. Here a total inflow of q_total is used
         # distributed over the inlet and outlet pores
@@ -81,7 +82,7 @@ def multiscale_simulation(restart):
     dt = 0.01*network_volume / q_total
     print "time step is", dt
 
-    for i in xrange(4):
+    for i in xrange(40):
         multiscale_sim.bc_const_source_xmin(wett_source=0.0, nwett_source=q_total)
         multiscale_sim.bc_const_source_xmax(wett_source=-q_total, nwett_source=0.0)
         multiscale_sim.initialize()
