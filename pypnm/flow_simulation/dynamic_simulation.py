@@ -1,23 +1,22 @@
 import copy
 import logging
-from pypnm.linalg.linear_system_solver import PressureSolverDynamicDirichlet
-from pypnm.linalg.laplacianmatrix import laplacian_from_network
+
 import numpy as np
+from numpy.linalg import norm
 
 from pypnm.attribute_calculators.conductance_calc import ConductanceCalc
 from pypnm.attribute_calculators.pc_computer import DynamicCapillaryPressureComputer
+from pypnm.flow_simulation.pn_algorithms import update_pore_status, update_tube_piston_w, snapoff_all_tubes, \
+    get_piston_disp_tubes_nonwett, invade_tube_nw, get_piston_disp_tubes_wett, invade_tube_w
 from pypnm.flow_simulation.simulation import Simulation
 from pypnm.flow_simulation.simulation_bc import SimulationBoundaryCondition
-
-from pypnm.porenetwork.pn_algorithms import update_pore_status, update_tube_piston_w, snapoff_all_tubes, \
-    get_piston_disp_tubes_nonwett, invade_tube_nw, get_piston_disp_tubes_wett, invade_tube_w
+from pypnm.linalg.laplacianmatrix import laplacian_from_network
+from pypnm.linalg.linear_system_solver import PressureSolverDynamicDirichlet
+from pypnm.linalg.petsc_interface import get_petsc_ksp, petsc_solve_from_ksp
+from pypnm.porenetwork.constants import NWETT, WETT
 from pypnm.porenetwork.pore_element_models import JNModel
 from pypnm.porenetwork.saturation_computer import DynamicSaturationComputer
 from time_stepper import DynamicTimeStepper
-from pypnm.porenetwork.constants import NWETT, WETT
-
-from numpy.linalg import norm
-from pypnm.linalg.petsc_interface import get_petsc_ksp, petsc_solve_from_ksp
 
 logger = logging.getLogger('pypnm')
 
@@ -74,7 +73,7 @@ class DynamicSimulation(Simulation):
 
         self.ti_freeze_displacement = dict()
 
-        self.cum_flux = np.zeros(network.nr_p)
+        self.cum_flux_tubes = np.zeros(network.nr_t)
 
     def reset_status(self):
         """
@@ -194,9 +193,10 @@ class DynamicSimulation(Simulation):
         logger.debug("Solving Pressure with " + self.press_solver_type)
         self.network.pores.p_w[:] = press_solver.solve(self.press_solver_type)
         self.network.pores.p_n[:] = self.network.pores.p_w + self.network.pores.p_c
-        logger.debug("Computing nonwetting flux")
 
+        logger.debug("Computing nonwetting and wetting fluxes")
         self.flux_n[:] = press_solver.compute_nonwetting_flux()
+        self.flux_w[:] = press_solver.compute_wetting_flux()
 
     def __update_saturation_implicit(self, dt):
         eps_sat = 1.e-4
@@ -243,13 +243,13 @@ class DynamicSimulation(Simulation):
                 p_n = p_w + p_c
                 # Solve for saturation
                 if iter == 0:
-                    damping = 1
+                    damping = 1.
                 if iter > 0:
-                    damping = 0.1
+                    damping = 0.4
                 if iter > 10:
-                    damping = 0.05
+                    damping = 0.1
                 if iter > 20:
-                    damping = 0.025
+                    damping = 0.055
                 sat = (1-damping)*sat + damping * (network.pores.sat + (self.q_n - A_n * p_n) * dt / network.pores.vol)
                 if np.min(sat) < 0.0:
                     print "saturation undershoot decreasing time-step slightly"
@@ -440,8 +440,8 @@ class DynamicSimulation(Simulation):
 
             self.__invade_nonwetting_source_pores()
 
-            update_pore_status(self.network, flux_n=self.flux_n, source_nonwett=self.q_n,
-                               bool_accounted_pores=self.bool_accounted_pores)
+            update_pore_status(self.network, flux_n=self.flux_n, flux_w=self.flux_w, source_nonwett=self.q_n,
+                               source_wett=self.q_w, bool_accounted_pores=self.bool_accounted_pores)
 
             self.__set_rhs_source_arrays(self.bc)
             ierr = self.__adjust_magnitude_sink_pores(WETT)
@@ -525,8 +525,8 @@ class DynamicSimulation(Simulation):
         if ierr == -1:
             return ierr
 
-        update_pore_status(self.network, flux_n=self.flux_n, source_nonwett=self.q_n,
-                           bool_accounted_pores=self.bool_accounted_pores)
+        update_pore_status(self.network, flux_n=self.flux_n, flux_w=self.flux_w, source_nonwett=self.q_n,
+                           source_wett=self.q_w, bool_accounted_pores=self.bool_accounted_pores)
 
         ierr = interior_loop()
 
@@ -537,13 +537,13 @@ class DynamicSimulation(Simulation):
             self.ti_freeze_displacement[ti] += 1
 
         for key in list(self.ti_freeze_displacement.keys()):
-            if self.ti_freeze_displacement[key] > 20:
+            if self.ti_freeze_displacement[key] > 3:
                 del self.ti_freeze_displacement[key]
 
         logger.debug("frozen tubes are currently %s", self.ti_freeze_displacement.keys())
 
         for iter in xrange(10000):
-            is_event = update_tube_piston_w(network, self.piston_entry, self.flux_n, self.q_n)
+            is_event = update_tube_piston_w(network, self.piston_entry, self.flux_w, self.q_w)
             ierr = interior_loop()
             if ierr == -1:
                 return -1
@@ -573,11 +573,17 @@ class DynamicSimulation(Simulation):
                 if ierr == -1:
                     return ierr
 
+        ti_piston_wett = get_piston_disp_tubes_wett(network, self.piston_entry, self.flux_w, self.q_w)
+
+        for ti_wett in ti_piston_wett:
+            invade_tube_w(network, ti_wett)
+            ierr = interior_loop()
+
         if ierr == -1:
             return ierr
 
-        update_pore_status(self.network, flux_n=self.flux_n, source_nonwett=self.q_n,
-                           bool_accounted_pores=self.bool_accounted_pores)
+        update_pore_status(self.network, flux_n=self.flux_n, flux_w=self.flux_w, source_nonwett=self.q_n,
+                           source_wett=self.q_w, bool_accounted_pores=self.bool_accounted_pores)
 
         ierr = interior_loop()
         if ierr == -1:
@@ -592,7 +598,7 @@ class DynamicSimulation(Simulation):
             self.network.pores.p_c[self.bc.pi_list_inlet] = self.bc.press_inlet_nw - self.bc.press_inlet_w
 
         if len(self.bc.pi_list_outlet) > 0:
-            self.network.pores.p_c[self.bc.pi_list_outlet] = 0.0
+            self.network.pores.p_c[self.bc.pi_list_outlet] = 0.001
 
     def __advance(self, stop_criterion):
         self.network.pores.p_w[:] = 0.0
@@ -658,7 +664,9 @@ class DynamicSimulation(Simulation):
             else:
                 dt = self.__update_saturation_implicit(dt=dt)
 
-            self.cum_flux += (self.q_n - self.flux_n) * dt
+            pi_1 = network.edgelist[:,0]
+            pi_2 = network.edgelist[:,1]
+            self.cum_flux_tubes += (network.pores.p_n[pi_1] - network.pores.p_n[pi_2]) * network.tubes.k_n * dt
 
             _plist = self.bc.pi_list_inlet
             if len(_plist) > 0:

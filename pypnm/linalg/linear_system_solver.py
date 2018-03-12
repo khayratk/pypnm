@@ -287,7 +287,16 @@ class LinearSystemStandard(object):
         self.rhs.val[pi_list] = value
 
 
-class DynamicPressureSolverMethods(object):
+class PressureSolverDynamicDirichlet(object):
+    def __init__(self, network):
+        self.network = network
+        self.rhs_matrix = LaplacianMatrix(self.network)
+        self.rhs_matrix_csr = self.rhs_matrix.get_csr_matrix()
+        self.solver_matrix = LaplacianMatrix(self.network)
+        self.csr_solver_matrix = self.solver_matrix.get_csr_matrix()
+        self.rhs = np.zeros(network.nr_p)
+        self.sol = np.zeros(network.nr_p)
+
     def create_flux_matrix(self, cond):
         matrix = self.rhs_matrix
         matrix.fill_csr_matrix_with_edge_weights(self.rhs_matrix_csr, cond)
@@ -318,17 +327,6 @@ class DynamicPressureSolverMethods(object):
         assert len(source) == self.network.nr_p
         self.rhs[0:self.network.nr_p] += source
 
-
-class PressureSolverDynamicDirichlet(DynamicPressureSolverMethods):
-    def __init__(self, network):
-        self.network = network
-        self.rhs_matrix = LaplacianMatrix(self.network)
-        self.rhs_matrix_csr = self.rhs_matrix.get_csr_matrix()
-        self.solver_matrix = LaplacianMatrix(self.network)
-        self.csr_solver_matrix = self.solver_matrix.get_csr_matrix()
-        self.rhs = np.zeros(network.nr_p)
-        self.sol = np.zeros(network.nr_p)
-
     def __set_matrix(self, k_n, k_w):
         self.solver_matrix.fill_csr_matrix_with_edge_weights(self.csr_solver_matrix, k_n + k_w)
 
@@ -346,7 +344,7 @@ class PressureSolverDynamicDirichlet(DynamicPressureSolverMethods):
         self.__set_matrix(k_n, k_w)
         self.set_rhs(k_n, p_c)
 
-    def solve(self, solver="lu", x0=None, tol=1.e-6):
+    def solve(self, solver="lu", x0=None, tol=1.e-9):
         solver = solver.lower()
         sf = 1e30
         pores = self.network.pores

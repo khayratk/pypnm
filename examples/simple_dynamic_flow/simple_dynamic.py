@@ -162,8 +162,8 @@ def get_unblocked_tubes(network):
     pore_list_1 = network.edgelist[:, 0]
     pore_list_2 = network.edgelist[:, 1]
 
-    saturated_1 = network.pores.sat[pore_list_1] >= 0.999
-    saturated_2 = network.pores.sat[pore_list_2] >= 0.999
+    saturated_1 = network.pores.sat[pore_list_1] >= 0.99
+    saturated_2 = network.pores.sat[pore_list_2] >= 0.99
 
     unblock_criteria = np.logical_not(saturated_1) & np.logical_not(saturated_2)
     mask_unblocked_tubes = unblock_criteria & (network.tubes.invaded == 2)
@@ -203,7 +203,7 @@ def drain_tube(network, ti, tube_conductances, mu_n):
     tubes = network.tubes
     pores = network.pores
 
-    if tubes.invaded[ti]==2:
+    if tubes.invaded[ti] == 2:
         print "unblocking tube and invading:", ti
     else:
         print "invading tube", ti
@@ -229,8 +229,8 @@ def run():
         network = PoreNetwork.load("benchmark_network.pkl")
 
     except IOError:
-        # network = unstructured_network_delaunay(2000, quasi_2d=True)
-        network = structured_network(40, 20, 2)
+        network = unstructured_network_delaunay(20000, quasi_2d=True)
+        #network = structured_network(40, 20, 2)
         network.save("benchmark_network.pkl")
 
     tubes = network.tubes
@@ -275,7 +275,7 @@ def run():
             ti_drained = (tubes.invaded == 1).nonzero()[0]
             ti_imbibed = (tubes.invaded == 0).nonzero()[0]
             tube_conductances[:] = 0.0
-            tubes.invaded[tubes.invaded==2] = 0
+            # tubes.invaded[tubes.invaded==2] = 0
             tube_conductances[ti_drained] = compute_conductance(tubes.r[ti_drained], tubes.l[ti_drained], mu_n)
             tube_conductances[ti_imbibed] = compute_conductance(tubes.r[ti_imbibed], tubes.l[ti_imbibed], mu_w)
 
@@ -322,25 +322,6 @@ def run():
                         tube_conductances[ti_blocked] = 0.0
                         tubes.invaded[ti_blocked] = 2
                         assert np.sum(network.pores.invaded[network.edgelist[ti_blocked]]) > 0
-
-                    # If all interface pores are blocked, unlock one of them.
-                    ti_blocked_all = (tubes.invaded == 2).nonzero()[0]
-                    p_1, p_2 = network.edgelist[:, 0], network.edgelist[:, 1]
-                    intfc_mask = ((pores.sat[p_1] >= 0.999) | (pores.sat[p_2] >= 0.999)) &( (tubes.invaded==0) | (tubes.invaded == 2))
-                    ti_intfc = intfc_mask.nonzero()[0]
-
-                    assert len(ti_intfc) >= len(ti_blocked_all), "%d, %d" %(len(ti_intfc), len(ti_blocked_all))
-                    print "num tubes on interface, num of tubes blocked", len(ti_intfc), len(ti_blocked_all)
-
-                    if len(ti_blocked_all)>0 and (len(ti_intfc) == len(ti_blocked_all)):
-                        print "All interface tubes blocked"
-                        flux_n = compute_nonwetting_influx(network, tube_conductances, pressure, q_n)
-                        dt_drain, dt_imb = compute_timestep(network, flux_n)
-
-                        if dt_drain == 0.0:
-                            print "All interface tubes blocked, opening widest tube and timestep is zero"
-                            ti_largest = ti_blocked_all[np.argmax(tubes.r[ti_blocked_all])]
-                            drain_tube(network, ti_largest, tube_conductances, mu_n)
 
                     if len(ti_list_blocked) == 0:
                         break
@@ -411,6 +392,16 @@ def run():
             flux_n = compute_nonwetting_influx(network, tube_conductances, pressure, q_n)
             dt_drain, dt_imb = compute_timestep(network, flux_n)
             dt = min(dt_drain, dt_imb)
+
+            if dt_drain == 0:
+                print "simulation stuck"
+                ti_blocked_all = (tubes.invaded == 2).nonzero()[0]
+                if len(ti_blocked_all) > 0:
+                    print "unblocking largest tube"
+                    ti_largest = ti_blocked_all[np.argmax(tubes.r[ti_blocked_all])]
+                    assert tubes.invaded[ti_largest] == 2
+                    drain_tube(network, ti_largest, tube_conductances, mu_n)
+                    assert np.all(tube_conductances[tubes.invaded ==1] > 0.0)
 
             network.pores.sat = update_sat(network, flux_n, dt)
 

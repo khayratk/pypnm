@@ -7,7 +7,7 @@ The simulation stops when a domain saturation of 0.5 has been reached
 
 import numpy as np
 from pypnm.porenetwork.constants import WEST, EAST
-from pypnm.porenetwork.network_factory import unstructured_network_periodic_y
+from pypnm.porenetwork.network_factory import unstructured_network_periodic_y, structured_network
 from pypnm.flow_simulation.dynamic_simulation import DynamicSimulation
 from pypnm.flow_simulation.simulation_bc import SimulationBoundaryCondition
 from sim_settings import sim_settings
@@ -16,15 +16,16 @@ import logging
 from pypnm.porenetwork.network_manipulation import remove_tubes_between_face_pores
 from pypnm.porenetwork.porenetwork import  PoreNetwork
 logger = logging.getLogger('pypnm')
-logger.setLevel("WARN")
-
+logger.setLevel("DEBUG")
+import pstats
+import cProfile
 
 def dynamic_simulation():
     try:
         network = PoreNetwork.load("network.pkl")
     except IOError:
         # Generate small unstructured network.
-        network = unstructured_network_periodic_y(4000, quasi_2d=True)
+        network = structured_network(20, 10, 10, periodic=True)
         network = remove_tubes_between_face_pores(network, EAST)
         network = remove_tubes_between_face_pores(network, WEST)
         pi_inlet = network.pi_list_face[WEST]
@@ -41,7 +42,7 @@ def dynamic_simulation():
     network.set_zero_volume_all_tubes()
 
     # Initialize solver
-    simulation = DynamicSimulation(network, sim_settings["fluid_properties"], explicit=False, delta_pc=0.01)
+    simulation = DynamicSimulation(network, sim_settings["fluid_properties"], explicit=True, delta_pc=0.01)
     simulation.press_solver_type = "petsc"
 
     # Set boundary conditions using list of pores and list of sources. Here a total inflow of q_total is used
@@ -73,18 +74,31 @@ def dynamic_simulation():
     simulation.add_vtk_output_tube_field(network.tubes.invaded, "Tube_invaded")
     simulation.write_vtk_output("initial_network")
 
-    for n in xrange(100):
-        print ("TimeStep: %g" % delta_t_output)
-        simulation.advance_in_time(delta_t=delta_t_output)
+    try:
+        for n in xrange(100):
+            print ("TimeStep: %g" % delta_t_output)
+            simulation.advance_in_time(delta_t=delta_t_output)
 
-        simulation.write_vtk_output(label=n)
-        simulation.write_to_hdf(label=n, folder_name="paraview_dyn_run")
+            simulation.write_vtk_output(label=n)
+            simulation.write_to_hdf(label=n, folder_name="paraview_dyn_run")
 
-        network.save("network_history/network" + str(n).zfill(5) + ".pkl")
-        np.save("network_history/flux"+str(n).zfill(5), simulation.cum_flux)
+            network.save("network_history/network" + str(n).zfill(5) + ".pkl")
+            np.save("network_history/flux"+str(n).zfill(5), simulation.cum_flux)
 
-        print "Nonwetting saturation:", simulation.nonwetting_saturation()
+            print "Nonwetting saturation:", simulation.nonwetting_saturation()
+
+    except KeyboardInterrupt:
+        pass
 
 
-if  __name__=="__main__":
-    dynamic_simulation()
+def print_profiling_info(filename):
+    p = pstats.Stats(filename)
+    p.sort_stats('cumulative').print_stats(50)
+    p.sort_stats('time').print_stats(50)
+
+
+if __name__ == "__main__":
+    exec_string = 'dynamic_simulation()'
+
+    cProfile.run(exec_string, 'restats')
+    print_profiling_info('restats')
