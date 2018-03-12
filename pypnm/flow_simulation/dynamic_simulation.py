@@ -22,7 +22,7 @@ logger = logging.getLogger('pypnm')
 
 
 class DynamicSimulation(Simulation):
-    def __init__(self, network, fluid_properties, explicit=True, delta_pc=0.01):
+    def __init__(self, network, fluid_properties, explicit=True, delta_pc=0.01, ptol=1e-6):
         super(DynamicSimulation, self).__init__(network, fluid_properties)
 
         if np.any(network.pores.vol <= 0.0):
@@ -31,6 +31,7 @@ class DynamicSimulation(Simulation):
         if np.any(network.tubes.vol != 0.0):
             raise ValueError("Network throats have to all have zero volume for dynamic flow solver")
 
+        self.press_solve_tol = ptol
         self.explicit = explicit
         self.fluid_properties = fluid_properties
         self.SatComputer = DynamicSaturationComputer
@@ -170,6 +171,7 @@ class DynamicSimulation(Simulation):
         return total_source
 
     def __solve_linear_system(self):
+        network = self.network
         logger.debug("Start of __solve_linear_system")
 
         press_solver = self.press_solver
@@ -191,8 +193,9 @@ class DynamicSimulation(Simulation):
             press_solver.set_dirichlet_pores(pi_list=[pi_dirichlet], value=0.0)
 
         logger.debug("Solving Pressure with " + self.press_solver_type)
-        self.network.pores.p_w[:] = press_solver.solve(self.press_solver_type)
-        self.network.pores.p_n[:] = self.network.pores.p_w + self.network.pores.p_c
+        network.pores.p_w[:] = press_solver.solve(self.press_solver_type, x0=network.pores.p_w,
+                                                  tol=self.press_solve_tol)
+        network.pores.p_n[:] = network.pores.p_w + network.pores.p_c
 
         logger.debug("Computing nonwetting and wetting fluxes")
         self.flux_n[:] = press_solver.compute_nonwetting_flux()

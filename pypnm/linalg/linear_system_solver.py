@@ -344,7 +344,7 @@ class PressureSolverDynamicDirichlet(object):
         self.__set_matrix(k_n, k_w)
         self.set_rhs(k_n, p_c)
 
-    def solve(self, solver="lu", x0=None, tol=1.e-9):
+    def solve(self, solver="lu", x0=None, tol=1.e-6):
         solver = solver.lower()
         sf = 1e30
         pores = self.network.pores
