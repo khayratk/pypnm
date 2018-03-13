@@ -127,7 +127,7 @@ class DynamicSimulation(Simulation):
             Time difference between initial state and final state of the simulation.
 
         """
-        logger.info("Starting simulation with time criterion")
+        logger.debug("Starting simulation with time criterion")
 
         self.stop_time = self.time + delta_t
 
@@ -540,7 +540,7 @@ class DynamicSimulation(Simulation):
             self.ti_freeze_displacement[ti] += 1
 
         for key in list(self.ti_freeze_displacement.keys()):
-            if self.ti_freeze_displacement[key] > 3:
+            if self.ti_freeze_displacement[key] > 20:
                 del self.ti_freeze_displacement[key]
 
         logger.debug("frozen tubes are currently %s", self.ti_freeze_displacement.keys())
@@ -566,7 +566,7 @@ class DynamicSimulation(Simulation):
             if ierr == -1:
                 return -1
 
-            ti_piston_wetting = get_piston_disp_tubes_wett(network, self.piston_entry, self.flux_n, self.q_n)
+            ti_piston_wetting = get_piston_disp_tubes_wett(network, self.piston_entry, self.flux_w, self.q_w)
 
             for ti_wett in ti_piston_wetting:
                 if ti_wett == ti_nonwett:
@@ -575,12 +575,6 @@ class DynamicSimulation(Simulation):
                 ierr = interior_loop()
                 if ierr == -1:
                     return ierr
-
-        ti_piston_wett = get_piston_disp_tubes_wett(network, self.piston_entry, self.flux_w, self.q_w)
-
-        for ti_wett in ti_piston_wett:
-            invade_tube_w(network, ti_wett)
-            ierr = interior_loop()
 
         if ierr == -1:
             return ierr
@@ -632,7 +626,7 @@ class DynamicSimulation(Simulation):
             if len(_plist) > 0:
                 self.network.pores.p_c[_plist] = self.bc.press_inlet_nw - self.bc.press_inlet_w
                 self.network.pores.sat[_plist] = self.pc_comp.pc_to_sat_func(self.network.pores.r[_plist], self.network.pores.p_c[_plist])
-            logger.info("Simulation Status. Time: %f , Saturation: %f", self.time, self.sat_comp.sat_nw())
+            logger.debug("Simulation Status. Time: %f , Saturation: %f", self.time, self.sat_comp.sat_nw())
 
             assert np.all(network.pores.invaded[self.q_n > 0.0] == 1)
 

@@ -16,7 +16,7 @@ import logging
 from pypnm.porenetwork.network_manipulation import remove_tubes_between_face_pores
 from pypnm.porenetwork.porenetwork import  PoreNetwork
 logger = logging.getLogger('pypnm')
-logger.setLevel("DEBUG")
+logger.setLevel("INFO")
 import pstats
 import cProfile
 

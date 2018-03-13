@@ -55,7 +55,7 @@ def create_delaunay_network(nr_pores, pdf_pore_radius, pdf_tube_radius, domain_s
 
     length = np.sqrt((network.pores.x[edgelist_1] - network.pores.x[edgelist_2]) ** 2 +
                      (network.pores.y[edgelist_1] - network.pores.y[edgelist_2]) ** 2 +
-                     (network.pores.z[edgelist_1] - network.pores.z[edgelist_2]) ** 2)
+                     (network.pores.z[edgelist_1] - network.pores.z[edgelist_2]) ** 2) - network.pores.r[edgelist_1] - network.pores.r[edgelist_2]
 
     rad_tubes = pdf_tube_radius.rvs(size=len(edgelist_1))
 

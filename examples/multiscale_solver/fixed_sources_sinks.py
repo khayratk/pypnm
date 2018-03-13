@@ -32,7 +32,7 @@ def multiscale_simulation(restart):
 
         mpicomm.Barrier()
         network_volume = mpicomm.bcast(network_volume)
-        q_total = 1.e-8  # All units are SI units
+        q_total = sim_settings['dynamic']['q_n_inlet']  # All units are SI units
 
     else:
         # Processor 0 loads the network

@@ -467,7 +467,7 @@ class MultiscaleSim(object):
         self.delta_s_max = delta_s
 
     def set_p_tol(self, p_tol):
-        self.p_tol = p_tol
+        self.ptol_ms = p_tol
 
     @staticmethod
     def _update_inter_conductances(inter_edges, p_c):

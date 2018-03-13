@@ -357,11 +357,10 @@ def create_rhs(unique_map, my_subnetworks, inter_processor_edges, inter_subgraph
         return np.copy(b)
 
 
-def solve_multiscale(ms, A, b, p_c, p_w=None, smooth_prolongator=True, tol=1.0e-5):
+def solve_multiscale(ms, A, b, p_w=None, smooth_prolongator=True, ptol=1.e-5, btol=1.e-2):
     if smooth_prolongator:
-        ms.smooth_prolongation_operator(A, tol=1e-3)
+        ms.smooth_prolongation_operator(A, tol=btol)
     if p_w is None:
         p_w = Epetra.Vector(A.RangeMap())
-    p_w = ms.iterative_solve(A, b, p_w, tol=tol)
-    p_n = p_w + p_c
-    return p_n, p_w
+    p_w = ms.iterative_solve(A, b, p_w, tol=ptol)
+    return p_w

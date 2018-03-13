@@ -89,11 +89,11 @@ class DynamicTimeStepper(object):
         # Print information for debugging.
         if dt_imb == 0.0:
             p_inds_dt_zero = (nwett_vol_imb == 0.0).nonzero()[0]
-            logger.info("indices with zero dt" + np.array_str(p_inds_dt_zero))
+            logger.debug("indices with zero dt" + np.array_str(p_inds_dt_zero))
             for i in p_inds_dt_zero:
                 network._log_pore_info(i)
 
-            logger.info("Time Step for imbibition is Zero")
+            logger.debug("Time Step for imbibition is Zero")
 
         return dt_imb, {"pore_imbibe": dt_imbibe_pore,
                         "dt_sat_w_double": dt_sat_w_double,
@@ -159,6 +159,6 @@ class DynamicTimeStepper(object):
 
         assert dt >= 0.0
 
-        logger.info("Time step is %e. dt_drain: %e, dt_imb: %e", dt, dt_drain, dt_imb)
+        logger.debug("Time step is %e. dt_drain: %e, dt_imb: %e", dt, dt_drain, dt_imb)
 
         return dt, dt_details

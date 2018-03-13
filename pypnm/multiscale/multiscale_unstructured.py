@@ -35,7 +35,7 @@ class MultiScaleSimUnstructured(MultiscaleSim):
         Integer array of length network.nr_p containing the partition of the network.
     """
     def __init__(self, network,  fluid_properties, num_subnetworks, comm=None, mpicomm=None, subgraph_ids=None,
-                 delta_s_max=0.01):
+                 delta_s_max=0.01, delta_pc=0.01, ptol_ms=1.e-6, ptol_fs=1.e-6, btol=1.e-2):
         self.network = network
 
         if comm is None:
@@ -122,7 +122,6 @@ class MultiScaleSimUnstructured(MultiscaleSim):
         for i in self.my_subgraph_ids:
             self.my_subgraph_support[i] = self.my_subnetworks[i].pi_local_to_global
 
-
         # support region for each subgraph
         self.my_subgraph_support_with_ghosts = dict()
         for i in self.my_subgraph_ids_with_ghost:
@@ -159,11 +158,20 @@ class MultiScaleSimUnstructured(MultiscaleSim):
         self.global_source_nonwett_with_ghost = Epetra.Vector(nonunique_map)
         self.out_flux_n_with_ghost = Epetra.Vector(nonunique_map)
 
+        # Simulation parameters
+        self.delta_s_max = delta_s_max
+        self.ptol_ms = ptol_ms
+        self.ptol_fs = ptol_fs
+        self.delta_pc = delta_pc
+        self.btol = btol
+
         # Crate dynamic simulations
         self.simulations = dict()
 
         for i in self.my_subgraph_ids:
-            self.simulations[i] = DynamicSimulation(self.my_subnetworks[i], self.fluid_properties)
+            self.simulations[i] = DynamicSimulation(self.my_subnetworks[i], self.fluid_properties, delta_pc=self.delta_pc,
+                                                    ptol=self.ptol_fs)
+
             self.simulations[i].solver_type = "lu"
 
             k_comp = ConductanceCalc(self.my_subnetworks[i], self.fluid_properties)
@@ -171,8 +179,6 @@ class MultiScaleSimUnstructured(MultiscaleSim):
             pc_comp = DynamicCapillaryPressureComputer(self.my_subnetworks[i])
             pc_comp.compute()
 
-        self.delta_s_max = delta_s_max
-        self.p_tol = 1.e-6
         self.time = 0.0
         self.stop_time = None
 
@@ -371,12 +377,14 @@ class MultiScaleSimUnstructured(MultiscaleSim):
                          self.global_source_wett, self.global_source_nonwett)
 
         if self.num_subnetworks == 1:
-            self.p_w = solve_aztec(A, rhs, self.p_w, tol=1e-8)
+            self.p_w = solve_aztec(A, rhs, self.p_w, tol=1.e-9)
             self.p_n = self.p_w + self.p_c
 
         else:
-            self.p_n, self.p_w = solve_multiscale(self.ms, A, rhs, self.p_c, p_w=self.p_w,
-                                                  smooth_prolongator=smooth_prolongator, tol=self.p_tol)
+            self.p_w = solve_multiscale(self.ms, A, rhs, p_w=self.p_w,
+                                                  smooth_prolongator=smooth_prolongator, ptol=self.ptol_ms,
+                                                  btol=self.btol)
+            self.p_n = self.p_w + self.p_c
 
         return self.p_n, self.p_w
 
@@ -526,7 +534,7 @@ class MultiScaleSimUnstructured(MultiscaleSim):
 
             dt_sim_min = 1.0e20
 
-            logger.info("advancing simulations with timestep %g", dt)
+            logger.debug("advancing simulations with timestep %g", dt)
 
             for i in self.simulations:
                 dt_sim = self.simulations[i].advance_in_time(delta_t=dt)
@@ -557,10 +565,8 @@ class MultiScaleSimUnstructured(MultiscaleSim):
             self.comm.Barrier()
             self.time += dt_sim_min
 
-            logger.info("time is %g", self.time)
-            logger.info("stop time is %g", self.stop_time)
-
-            print "Current simulation time", self.time
+            logger.debug("time is %g", self.time)
+            logger.debug("stop time is %g", self.stop_time)
 
             if np.isclose(self.time, self.stop_time):
                 break
