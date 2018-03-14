@@ -614,7 +614,7 @@ class DynamicSimulation(Simulation):
         self.q_n_tot_sink = np.sum(self.q_n[self.bc.pi_list_nw_sink])
         self.q_n_tot = self.q_n_tot_source + self.q_n_tot_sink
 
-        logger.info("Simulation Status. Time: %f , Saturation: %f", self.time, self.sat_comp.sat_nw())
+        logger.debug("Simulation Status. Time: %f , Saturation: %f", self.time, self.sat_comp.sat_nw())
 
         network.pores.invaded[self.bc.pi_list_nw_source] = NWETT
 
@@ -707,7 +707,7 @@ class DynamicSimulation(Simulation):
                 break
 
             if stop_criterion():
-                logger.info("Exiting solver because stopping criterion has been successfully reached")
+                logger.debug("Exiting solver because stopping criterion has been successfully reached")
                 break
 
             # If either of the initial nonwetting sink and source is nonzero and they are now, then stop the simulation
