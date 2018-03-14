@@ -466,7 +466,7 @@ class DynamicSimulation(Simulation):
                 STOP_FLAG = True
                 break
 
-            logger.info("Solving linear system")
+            logger.debug("Solving linear system")
             self.__solve_linear_system()
 
             iter += 1
@@ -479,7 +479,7 @@ class DynamicSimulation(Simulation):
         assert np.all(self.network.pores.invaded[self.q_n > 0.0] == 1)
 
         if dt == 0.0:
-            logger.warning("Time step is zero after attempting correction")
+            logger.debug("Time step is zero after attempting correction")
 
         # Compute time-step for a stop_time criteria
         if self.stop_time is not None:
