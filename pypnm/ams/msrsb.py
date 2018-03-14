@@ -243,13 +243,6 @@ class MSRSB(object):
 
         residual = self.__compute_residual(A, rhs, x0, residual)
 
-        if residual.NormInf() / ref_residual_norm < tol:
-            logger.debug("Solution already converged before iteration")
-            if conv_history:
-                return x0, history
-            else:
-                return x0
-
         error = Epetra.Vector(self.P.RangeMap())
         if with_multiscale:
             error = self.__solve_one_step(residual, RAP_msfv, self.R)
