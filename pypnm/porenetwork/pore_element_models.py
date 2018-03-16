@@ -96,8 +96,8 @@ def throat_diameter_acharya(network, p_1, p_2, l_tot, n):
     sin = np.sin(np.pi/4.0)
     cos = np.cos(np.pi/4.0)
 
-    rho1 = r1*sin/(1-r1*cos)**n
-    rho2 = r2*sin/(1-r2*cos)**n
+    rho1 = r1*sin/(1.-r1*cos)**n
+    rho2 = r2*sin/(1.-r2*cos)**n
 
     r_t_norm = rho1*rho2*(rho1**(1./n) + rho2**(1./n))**(-n)
 
