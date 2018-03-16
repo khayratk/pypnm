@@ -89,3 +89,16 @@ class ToraModel(BasePEModel):
         assert np.all(Sat_nw_loc >= 0.0), "Capillary pressure values are not consistant"
 
         return Sat_nw_loc
+
+
+def throat_diameter_acharya(network, p_1, p_2, l_tot, n):
+    r1, r2 = network.pores.r[p_1]/l_tot, network.pores.r[p_2]/l_tot
+    sin = np.sin(np.pi/4.0)
+    cos = np.cos(np.pi/4.0)
+
+    rho1 = r1*sin/(1-r1*cos)**n
+    rho2 = r2*sin/(1-r2*cos)**n
+
+    r_t_norm = rho1*rho2*(rho1**(1./n) + rho2**(1./n))**(-n)
+
+    return r_t_norm*l_tot

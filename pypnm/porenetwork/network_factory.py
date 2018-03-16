@@ -70,7 +70,7 @@ def unstructured_network(nr_pores, domain_size=None, is_2d=False):
     return network
 
 
-def unstructured_network_delaunay(nr_pores, domain_size=None, quasi_2d=False):
+def unstructured_network_delaunay(nr_pores, domain_size=None, quasi_2d=False, body_throat_corr_param=None):
     r_min, r_max = 20e-6, 75e-6
     pdf_pore_radius = beta(1.25, 1.5, loc=r_min, scale=(r_max - r_min))
 
@@ -87,8 +87,13 @@ def unstructured_network_delaunay(nr_pores, domain_size=None, quasi_2d=False):
             domain_length = (4. / 3. * np.pi * r_max ** 3 * nr_pores) ** (1. / 3.)
             domain_size = [2 * domain_length, domain_length, domain_length]
 
-    network = create_delaunay_network(nr_pores, pdf_pore_radius=pdf_pore_radius,
-                                      pdf_tube_radius=pdf_tube_radius, domain_size=domain_size)
+    if body_throat_corr_param is not None:
+        network = create_delaunay_network(nr_pores, pdf_pore_radius=pdf_pore_radius,
+                                          body_throat_corr_param=body_throat_corr_param, domain_size=domain_size)
+    else:
+        network = create_delaunay_network(nr_pores, pdf_pore_radius=pdf_pore_radius,
+                                          pdf_tube_radius=pdf_tube_radius, domain_size=domain_size)
+
     network = reorder_network(network)  # Important for efficiency
     return network
 

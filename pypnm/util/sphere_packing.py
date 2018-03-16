@@ -3,6 +3,8 @@ from itertools import product
 
 import numpy as np
 from scipy import spatial
+from scipy.interpolate import RegularGridInterpolator
+
 
 
 def neighboring_indices(num_partitions, index):
@@ -87,3 +89,73 @@ def sphere_packing(rad, domain_size, is_2d=False):
             assert dist[local_index] > (rad[i] + rad[i_ngh])
 
     return coords[:, 0], coords[:, 1], coords[:, 2], rad
+
+
+def sphere_packing_from_field(nr_pores, field, domain_size):
+    cell_to_sphere_ids = defaultdict(list)
+    ngh_indices_map = dict()
+
+    len_x = domain_size[0]
+    len_y = domain_size[1]
+    len_z = domain_size[2]
+
+    x = np.linspace(0, len_x, field.shape[0])
+    y = np.linspace(0, len_y, field.shape[1])
+    z = np.linspace(0, len_z, field.shape[2])
+    my_interpolating_function = RegularGridInterpolator((x, y, z), field, method = "nearest")
+
+    dimensions = np.asarray([len_x, len_y, len_z])
+    coords = np.zeros([nr_pores, 3])
+
+    max_r = np.max(field)
+    delta_h = 2.0 * max_r
+    nx, ny, nz = int(len_x / delta_h), int(len_y / delta_h), max(int(len_z / delta_h), 1)
+
+    for index in product(xrange(nx), xrange(ny), xrange(nz)):
+        ngh_indices_map[index] = neighboring_indices(num_partitions=(nx, ny, nz), index=index)
+
+    rad = np.zeros(nr_pores)
+
+    for i in xrange(nr_pores):
+        counter = 0
+        if i%1000 == 0:
+            print i, np.sum(4/3.*rad**3*np.pi)/(len_x*len_y*len_z)
+        while True:
+            new_coord = np.random.rand(3) * dimensions
+            index = int(new_coord[0] * nx / len_x), int(new_coord[1] * ny / len_y), int(new_coord[2] * nz / len_z)
+            nghs = ngh_indices_map[index]
+            overlap = False
+
+            rad_current = my_interpolating_function(new_coord)
+
+            for ngh in [index] + nghs:
+                for sphere_id in cell_to_sphere_ids[ngh]:
+                    overlap = (sum((coords[sphere_id] - new_coord) ** 2) - (rad[sphere_id] + rad_current) ** 2) < 0
+                    if overlap:
+                        break
+                if overlap:
+                    break
+
+            if not overlap:
+                cell_to_sphere_ids[index].append(i)
+                coords[i][:] = new_coord
+                rad[i] = rad_current
+                break
+
+            counter += 1
+            if counter == 1000:
+                raise RuntimeError("Sphere packing stuck")
+
+    rad = np.asarray(rad)
+    points = zip(coords[:, 0], coords[:, 1], coords[:, 2])
+    tree = spatial.cKDTree(points)
+
+    for i in xrange(nr_pores):
+        dist, i_nghs = tree.query((coords[i, 0], coords[i, 1], coords[i, 2]), k=20)
+        for local_index, i_ngh in enumerate(i_nghs):
+            if i_ngh == i:
+                continue
+            assert dist[local_index] > (rad[i] + rad[i_ngh])
+
+    return coords[:, 0], coords[:, 1], coords[:, 2], rad
+

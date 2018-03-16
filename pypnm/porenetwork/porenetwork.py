@@ -269,7 +269,7 @@ class PoreNetwork(object):
 
         self._create_helper_properties()
 
-    def add_throats(self, edgelist, r=None, l=None, G=None):
+    def add_throats(self, edgelist, r=None, l=None, l_tot = None, G=None):
         """
         Adds throats to network
 
@@ -281,6 +281,8 @@ class PoreNetwork(object):
             Array of size :math:`N_t`  containing the radii of the added throats
         l: ndarray
             Array of size :math:`N_t`  containing the lengths of the added throats
+        l_tot: ndarray
+            Array of size :math:`N_t`  containing the pore to pore distance of the added throats
         G: ndarray
             Array of size :math:`N_t`  containing the shape factors of the added throats
         """
@@ -292,10 +294,13 @@ class PoreNetwork(object):
         if l is None:
             l = np.ones(nr_new_tubes) * np.mean(self.tubes.l)
 
+        if l_tot is None:
+            l_tot = l + self.pores.r[edgelist[:, 0]] + self.pores.r[edgelist[:, 1]]
+
         if G is None:
             G = np.ones(nr_new_tubes) * np.mean(self.tubes.G)
 
-        self.tubes.append_tubes(r=r, l=l, G=G)
+        self.tubes.append_tubes(r=r, l=l, G=G, l_tot = l_tot)
 
         self.edgelist = np.vstack((self.edgelist, edgelist))
 
@@ -457,8 +462,6 @@ class PoreNetwork(object):
             f['/tubes/length_throat'] = self.tubes.l
             f['/tubes/vol'] = self.tubes.vol
             f['/tubes/clay_vol'] = self.tubes.vol*0.01
-
-
 
     def write_network_statistics(self, folder_name="network_statistics"):
         """

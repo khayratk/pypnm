@@ -1,12 +1,13 @@
 import numpy as np
 from pypnm.porenetwork.network_manipulation import prune_network
 from pypnm.porenetwork.structured_porenetwork import StructuredPoreNetwork
+from pypnm.porenetwork.pore_element_models import throat_diameter_acharya
 from pypnm.util.sphere_packing import sphere_packing
 from scipy.spatial import Delaunay
 from scipy.sparse import csr_matrix
 
 
-def create_delaunay_network(nr_pores, pdf_pore_radius, pdf_tube_radius, domain_size, is_2d=False):
+def create_delaunay_network(nr_pores, pdf_pore_radius, domain_size, is_2d=False, pdf_tube_radius=None, body_throat_corr_param = None):
     """
     Creates an unstructured network with pore bodies randomly distributed in space. A Delaunay tesselation is used
     to connect the pores together with throats.
@@ -33,6 +34,10 @@ def create_delaunay_network(nr_pores, pdf_pore_radius, pdf_tube_radius, domain_s
     network: PoreNetwork
 
     """
+
+    if pdf_tube_radius is None and body_throat_corr_param is None:
+        raise ValueError("either pdf_tube_radius or body_throat_corr_param need to be specified")
+
     nr_new_pores = nr_pores - 1
 
     rad_generated = pdf_pore_radius.rvs(size=nr_new_pores)
@@ -53,11 +58,19 @@ def create_delaunay_network(nr_pores, pdf_pore_radius, pdf_tube_radius, domain_s
     edgelist_2 = coo_mat.col[coo_mat.row < coo_mat.col] + 1
     edgelist = np.vstack([edgelist_1, edgelist_2]).T
 
-    length = np.sqrt((network.pores.x[edgelist_1] - network.pores.x[edgelist_2]) ** 2 +
+    l_total = np.sqrt((network.pores.x[edgelist_1] - network.pores.x[edgelist_2]) ** 2 +
                      (network.pores.y[edgelist_1] - network.pores.y[edgelist_2]) ** 2 +
-                     (network.pores.z[edgelist_1] - network.pores.z[edgelist_2]) ** 2) - network.pores.r[edgelist_1] - network.pores.r[edgelist_2]
+                     (network.pores.z[edgelist_1] - network.pores.z[edgelist_2]) ** 2)
 
-    rad_tubes = pdf_tube_radius.rvs(size=len(edgelist_1))
+    length = l_total - network.pores.r[edgelist_1] - network.pores.r[edgelist_2]
+
+    assert np.all(length > 0.0)
+
+    if pdf_tube_radius is not None:
+        rad_tubes = pdf_tube_radius.rvs(size=len(edgelist_1))
+
+    if body_throat_corr_param is not None:
+        rad_tubes = throat_diameter_acharya(network, edgelist_1, edgelist_2, l_total, body_throat_corr_param)
 
     network.add_throats(edgelist, r=rad_tubes, l=length, G=np.ones(len(edgelist_1)) / 16.0)
 

@@ -38,18 +38,20 @@ class Tubes(NetworkElements):
     def _compute_volume(a_tot, len):
         return a_tot * len
 
-    def append_tubes(self, l, r, G=None):
+    def append_tubes(self, l, r, G=None, l_tot=None):
         """
         Adds tubes to Tubes object
 
         Parameters
         ----------
         l: ndarray
-            length of added tubes
+            length of added tubes$
         r: ndarray
             radii of added tubes
         G: ndarray, optional
             shape factor of added tubes
+        l_tot: ndarray
+            pore to pore distance of added tubes
         """
         nr_new_tubes = len(l)
 
@@ -71,6 +73,11 @@ class Tubes(NetworkElements):
             self.G[ti_new_tubes] = np.mean(self.G)
         else:
             self.G[ti_new_tubes] = G
+
+        if l_tot is None:
+            self.l_tot[ti_new_tubes] = self.l[:]
+        else:
+            self.l_tot[ti_new_tubes] = l_tot
 
         self.A_tot[ti_new_tubes] = self.compute_area(self.r[ti_new_tubes], self.G[ti_new_tubes])
         self.vol[ti_new_tubes] = self._compute_volume(self.A_tot[ti_new_tubes], self.l[ti_new_tubes])
