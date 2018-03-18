@@ -307,7 +307,7 @@ class DynamicSimulation(Simulation):
         if self.bc.no_dirichlet:
             total_flux = np.sum(self.q_w) + np.sum(self.q_n)
             source_max = np.max(np.abs(self.q_n)) + np.max(np.abs(self.q_w))
-            assert np.abs(total_flux) <= source_max / 1.e6, "total flux is %e. Maximum source is %e" % (
+            assert np.abs(total_flux) <= source_max * 1.e-4, "total flux is %e. Maximum source is %e" % (
             total_flux, source_max)
 
     def __adjust_magnitude_wetting_sink_pores(self):

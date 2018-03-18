@@ -72,7 +72,7 @@ def create_delaunay_network(nr_pores, pdf_pore_radius, domain_size, is_2d=False,
     if body_throat_corr_param is not None:
         rad_tubes = throat_diameter_acharya(network, edgelist_1, edgelist_2, l_total, body_throat_corr_param)
 
-    network.add_throats(edgelist, r=rad_tubes, l=length, G=np.ones(len(edgelist_1)) / 16.0)
+    network.add_throats(edgelist, r=rad_tubes, l=length, l_tot=l_total, G=np.ones(len(edgelist_1)) / 16.0)
 
     network._fix_tubes_larger_than_ngh_pores()
     network = prune_network(network, [0.1, 0.9, 0.1, 0.9, 0.1, 0.9])
