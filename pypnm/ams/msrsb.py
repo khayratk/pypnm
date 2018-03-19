@@ -337,9 +337,9 @@ class MSRSB(object):
 
         max_lhs = np.max(np.abs(lhs_coarse))
         max_rhs = np.max(np.abs(rhs_coarse))
-        tol = max(max_lhs, max_rhs)*1e-10
-        assert np.allclose(rhs_coarse[:], lhs_coarse[:], atol=tol), "max_lhs:%e max_rhs:%e " % (max_lhs, max_rhs)
-        assert np.allclose(lhs_coarse[:], rhs_coarse[:], atol=tol)
+        error = np.max(np.abs(max_lhs-max_rhs))
+        tol = max(max_lhs, max_rhs)*1e-8
+        assert np.allclose(rhs_coarse[:], lhs_coarse[:], atol=tol), "max_lhs:%e max_rhs:%e, max_error:%e " % (max_lhs, max_rhs, error)
 
         if conv_history:
             return x0, history
