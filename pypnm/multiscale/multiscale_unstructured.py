@@ -367,7 +367,7 @@ class MultiScaleSimUnstructured(MultiscaleSim):
                           self.inter_subgraph_edges)
 
         self.ms = MSRSB(A, self.my_subgraph_support, self.my_basis_support)
-        self.ms.smooth_prolongation_operator(A, tol=1.e-3)
+        self.ms.smooth_prolongation_operator(A, tol=self.btol)
 
     def __solve_pressure(self, smooth_prolongator=True):
         A = create_matrix(self.unique_map, ["k_n", "k_w"], self.my_subnetworks, self.inter_processor_edges,
@@ -515,6 +515,7 @@ class MultiScaleSimUnstructured(MultiscaleSim):
                 mass_balance = bc[i].mass_balance()
                 total_sources = self.simulations[i].total_source_nonwett + self.simulations[i].total_source_wett
                 assert mass_balance < total_sources * 1.e-6, "Mass balance: %e, Total sources: %g" % (mass_balance, total_sources)
+                logger.debug("Mass balance: %e, Total sources: %g", mass_balance, total_sources)
 
             subgraph_id_to_nw_influx = self.compute_nonwetting_influx(simulations)
             subgraph_id_to_volume = {i: self.my_subnetworks[i].total_vol for i in self.my_subgraph_ids}

@@ -337,6 +337,11 @@ def create_subnetwork_boundary_conditions(source_n, source_w, my_subnetworks, su
             total_sources = np.sum(q_list_source_nonwett[i]) + np.sum(q_list_source_wett[i])
             assert abs(mass_balance) < total_sources * 1.e-6, "Mass balance: %e, Total sources: %e" % (mass_balance, total_sources)
 
+            bc[i].scale_wetting_sources()
+            mass_balance = bc[i].mass_balance()
+            total_sources = np.sum(q_list_source_nonwett[i]) + np.sum(q_list_source_wett[i])
+            assert abs(mass_balance) < total_sources * 1.e-12, "Mass balance: %e, Total sources: %e" % (mass_balance, total_sources)
+
     return bc
 
 

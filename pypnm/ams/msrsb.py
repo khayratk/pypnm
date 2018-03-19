@@ -173,8 +173,16 @@ class MSRSB(object):
 
         sum_cols_P = sum_of_columns(self.P)
 
-        assert np.allclose(sum_cols_P[:], 1.0)
+        assert np.allclose(sum_cols_P[:], 1.0, atol=1.e-1000, rtol=1e-12)
 
+        # Important numerical  step to ensure that mass is exactly conserved to machine zero
+        """
+        tau[:] = 1./sum_cols_P[:]
+        self.P.LeftScale(tau)
+        sum_cols_P = sum_of_columns(self.P)
+
+        assert np.allclose(sum_cols_P[:], 1.0, atol=1.e-1000, rtol=1.e-15)
+        """
         assert ierr == 0
 
     def __solve_one_step(self, rhs, RAP, R):
@@ -316,6 +324,22 @@ class MSRSB(object):
 
         history["n_smooth"].append(n_smooth)
         history["residual"].append(residual.NormInf()[0] / ref_residual_norm)
+
+        # Check for convergence.:
+
+        lhs_fine = Epetra.Vector(A.DomainMap())
+        rhs_coarse = Epetra.Vector(self.R.DomainMap())
+        lhs_coarse = Epetra.Vector(self.R.DomainMap())
+
+        self.R.Multiply(True, rhs, rhs_coarse)
+        A.Multiply(False, x0, lhs_fine)
+        self.R.Multiply(True, lhs_fine, lhs_coarse)
+
+        max_lhs = np.max(np.abs(lhs_coarse))
+        max_rhs = np.max(np.abs(rhs_coarse))
+        tol = max(max_lhs, max_rhs)*1e-10
+        assert np.allclose(rhs_coarse[:], lhs_coarse[:], atol=tol), "max_lhs:%e max_rhs:%e " % (max_lhs, max_rhs)
+        assert np.allclose(lhs_coarse[:], rhs_coarse[:], atol=tol)
 
         if conv_history:
             return x0, history

@@ -295,7 +295,7 @@ class MultiscaleSim(object):
                           self.inter_subgraph_edges)
 
         self.ms = MSRSB(A, self.my_subgraph_support, self.my_basis_support)
-        self.ms.smooth_prolongation_operator(A, tol=1.e-3)
+        self.ms.smooth_prolongation_operator(A, tol=self.btol)
 
         assert ierr == 0
 
