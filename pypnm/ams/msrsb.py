@@ -330,16 +330,18 @@ class MSRSB(object):
         lhs_fine = Epetra.Vector(A.DomainMap())
         rhs_coarse = Epetra.Vector(self.R.DomainMap())
         lhs_coarse = Epetra.Vector(self.R.DomainMap())
+        error = Epetra.Vector(self.R.DomainMap())
 
         self.R.Multiply(True, rhs, rhs_coarse)
         A.Multiply(False, x0, lhs_fine)
         self.R.Multiply(True, lhs_fine, lhs_coarse)
 
-        max_lhs = np.max(np.abs(lhs_coarse))
-        max_rhs = np.max(np.abs(rhs_coarse))
-        error = np.max(np.abs(max_lhs-max_rhs))
+        max_lhs = lhs_coarse.NormInf()
+        max_rhs = rhs_coarse.NormInf()
+        error[:] = lhs_coarse[:]-rhs_coarse[:]
+        max_err = error.NormInf()
         tol = max(max_lhs, max_rhs)*1e-8
-        assert np.allclose(rhs_coarse[:], lhs_coarse[:], atol=tol), "max_lhs:%e max_rhs:%e, max_error:%e " % (max_lhs, max_rhs, error)
+        assert np.allclose(rhs_coarse[:], lhs_coarse[:], atol=tol), "max_lhs:%e max_rhs:%e, max_error:%e " % (max_lhs, max_rhs, max_err)
 
         if conv_history:
             return x0, history

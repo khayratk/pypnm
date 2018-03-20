@@ -514,7 +514,7 @@ class MultiScaleSimUnstructured(MultiscaleSim):
                 self.simulations[i].set_boundary_conditions(bc[i])
                 mass_balance = bc[i].mass_balance()
                 total_sources = self.simulations[i].total_source_nonwett + self.simulations[i].total_source_wett
-                assert mass_balance < total_sources * 1.e-6, "Mass balance: %e, Total sources: %g" % (mass_balance, total_sources)
+                assert mass_balance < total_sources * 1.e-4, "Mass balance: %e, Total sources: %g" % (mass_balance, total_sources)
                 logger.debug("Mass balance: %e, Total sources: %g", mass_balance, total_sources)
 
             subgraph_id_to_nw_influx = self.compute_nonwetting_influx(simulations)
