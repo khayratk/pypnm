@@ -118,7 +118,7 @@ def sphere_packing_from_field(nr_pores, field, domain_size):
 
     for i in xrange(nr_pores):
         counter = 0
-        if i%1000 == 0:
+        if i%10000 == 0:
             print i, np.sum(4/3.*rad**3*np.pi)/(len_x*len_y*len_z)
         while True:
             new_coord = np.random.rand(3) * dimensions

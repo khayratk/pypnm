@@ -45,6 +45,22 @@ class PoreNetwork(object):
         """
         return self.total_pore_vol + self.total_throat_vol
 
+
+    @property
+    def porosity(self):
+        """
+        Returns
+        _______
+        out: float
+            Porosity
+        """
+        pores = self.pores
+        len_x = np.max(pores.x) - np.min(pores.x)
+        len_y = np.max(pores.y) - np.min(pores.y)
+        len_z = np.max(pores.z) - np.min(pores.z)
+
+        return self.total_vol/(len_x * len_y *len_z)
+
     def distribute_throat_volume_to_neighboring_pores(self):
         """
         Distributes volume in throats equally among the neighboring pores (proportional according to pore volumes).
