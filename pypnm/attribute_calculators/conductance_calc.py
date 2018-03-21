@@ -1,5 +1,6 @@
 import numpy as np
 from pypnm.porenetwork.component import neighboring_edges_to_vertices
+import numexpr as ne
 
 
 class ConductanceCalc(object):
@@ -17,21 +18,22 @@ class ConductanceCalc(object):
     @staticmethod
     def _wetting_area(r_w, G):
         # Eq. 2 in G.Tora
-        assert len(r_w) == len(G)
-        A_w = (r_w ** 2) * (1. / (4 * G) - np.pi)
-        assert np.all((1. / (4 * G) - np.pi) > 0.0)
-        assert np.all(A_w >= 0)
+        if len(r_w) > 2.e4:
+            pi = np.pi
+            A_w = ne.evaluate("(r_w ** 2) * (1. / (4 * G) - pi)")
+        else:
+            A_w = (r_w ** 2) * (1. / (4 * G) - np.pi)
+
         return A_w
 
     @staticmethod
     def _compute_intfc_curvature(gamma, p_c, mask):
         if len(mask) != len(p_c):
             raise ValueError()
-
         assert np.all(p_c[mask] > 0.0)
         r_w = np.zeros_like(p_c)
         r_w[mask] = gamma / p_c[mask]
-        assert np.all(r_w[mask] > 0.0)
+
         return r_w
 
     @staticmethod
@@ -73,8 +75,6 @@ class ConductanceCalc(object):
         mu_w = fluid_properties['mu_w']
         gamma = fluid_properties['gamma']
 
-        assert np.all(el_len > 0)
-        assert np.all(el_G > 0)
         assert np.all(el_pc[nw_mask] > 1.0)
 
         assert len(nw_mask) == len(el_pc)
@@ -87,10 +87,9 @@ class ConductanceCalc(object):
         A_n[nw_mask] = (el_A_tot - A_w)[nw_mask]
 
         # Mean hydraulic radii
-        R_n = 0.5 * (el_rad + np.sqrt(A_n / np.pi))
+        # R_n = 0.5 * (el_rad + np.sqrt(A_n / np.pi))
         R_w = 0.5 * (el_rad + np.sqrt(el_A_tot / np.pi))
-        assert np.all(R_n >= 0)
-        assert np.all(R_w >= 0)
+
         assert np.all(el_pc[nw_mask] > gamma / el_rad[nw_mask])
         assert np.all(A_n >= 0)
 
@@ -107,8 +106,6 @@ class ConductanceCalc(object):
         k_w[w_mask] = ((R_w**2) * el_A_tot / el_len / (8 * mu_w))[w_mask]
         
         assert np.all(R_w[w_mask] > 0.0)
-        assert np.all(el_A_tot[w_mask] > 0.0)
-        assert np.all(k_w[w_mask] > 0.0)
         assert np.all(k_n[nw_mask] > 0.0)
         assert np.all(k_n >= 0.0)
         assert np.all(k_w > 0.0)

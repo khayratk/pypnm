@@ -471,8 +471,9 @@ class MultiscaleSim(object):
 
     @staticmethod
     def _update_inter_conductances(inter_edges, p_c):
-        inter_edgelist_local_1 = np.asarray([p_c.Map().LID(i) for i in inter_edges['edgelist'][0]], dtype=np.int32)
-        inter_edgelist_local_2 = np.asarray([p_c.Map().LID(i) for i in inter_edges['edgelist'][1]], dtype=np.int32)
+        epetra_map = p_c.Map()
+        inter_edgelist_local_1 = np.asarray([epetra_map.LID(i) for i in inter_edges['edgelist'][0]], dtype=np.int32)
+        inter_edgelist_local_2 = np.asarray([epetra_map.LID(i) for i in inter_edges['edgelist'][1]], dtype=np.int32)
 
         assert np.all(inter_edgelist_local_1 >= 0)
         assert np.all(inter_edgelist_local_2 >= 0)

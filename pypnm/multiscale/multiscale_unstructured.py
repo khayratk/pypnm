@@ -14,7 +14,7 @@ from pypnm.multiscale.multiscale_sim import MultiscaleSim, _create_subnetworks, 
     _network_saturation, logger
 from pypnm.multiscale.utils import update_inter_invasion_status_snap_off, create_matrix, create_rhs, solve_multiscale, \
     update_inter_invasion_status_piston, update_inter_invasion_status_piston_wetting, \
-    create_subnetwork_boundary_conditions
+    create_subnetwork_boundary_conditions, create_matrix_from_graph
 from pypnm.util.igraph_utils import network_to_igraph, coarse_graph_from_partition, support_of_basis_function, \
     graph_central_vertex
 
@@ -366,24 +366,25 @@ class MultiScaleSimUnstructured(MultiscaleSim):
         A = create_matrix(self.unique_map, ["k_n", "k_w"], self.my_subnetworks, self.inter_processor_edges,
                           self.inter_subgraph_edges)
 
+        self.Epetra_graph = A.Graph()
+
         self.ms = MSRSB(A, self.my_subgraph_support, self.my_basis_support)
         self.ms.smooth_prolongation_operator(A, tol=self.btol)
 
     def __solve_pressure(self, smooth_prolongator=True):
-        A = create_matrix(self.unique_map, ["k_n", "k_w"], self.my_subnetworks, self.inter_processor_edges,
-                          self.inter_subgraph_edges)
-        rhs = create_rhs(self.unique_map, self.my_subnetworks, self.inter_processor_edges, self.inter_subgraph_edges,
-                         self.p_c,
-                         self.global_source_wett, self.global_source_nonwett)
+        A = create_matrix_from_graph(self.unique_map, ["k_n", "k_w"], self.Epetra_graph, self.my_subnetworks,
+                                 self.inter_processor_edges, self.inter_subgraph_edges)
+
+        rhs = create_rhs(self.unique_map, self.my_subnetworks, self.Epetra_graph, self.inter_processor_edges,
+                         self.inter_subgraph_edges, self.p_c, self.global_source_wett, self.global_source_nonwett)
 
         if self.num_subnetworks == 1:
             self.p_w = solve_aztec(A, rhs, self.p_w, tol=1.e-9)
             self.p_n = self.p_w + self.p_c
 
         else:
-            self.p_w = solve_multiscale(self.ms, A, rhs, p_w=self.p_w,
-                                                  smooth_prolongator=smooth_prolongator, ptol=self.ptol_ms,
-                                                  btol=self.btol)
+            self.p_w = solve_multiscale(self.ms, A, rhs, p_w=self.p_w, smooth_prolongator=smooth_prolongator,
+                                        ptol=self.ptol_ms, btol=self.btol)
             self.p_n = self.p_w + self.p_c
 
         return self.p_n, self.p_w
@@ -424,8 +425,9 @@ class MultiScaleSimUnstructured(MultiscaleSim):
 
             self.p_w_with_ghost.Import(self.p_w, epetra_importer, Epetra.Insert)
 
-            AminusD_n = create_matrix(self.unique_map, ["k_n"], None, self.inter_processor_edges,
-                                      self.inter_subgraph_edges)
+            AminusD_n = create_matrix_from_graph(self.unique_map, ["k_n"], self.Epetra_graph, None,
+                                          self.inter_processor_edges, self.inter_subgraph_edges)
+
             ierr = AminusD_n.Multiply(False, self.p_n, self.out_flux_n)
             assert ierr == 0
             self.out_flux_n_with_ghost.Import(self.out_flux_n, epetra_importer, Epetra.Insert)
@@ -490,10 +492,11 @@ class MultiScaleSimUnstructured(MultiscaleSim):
 
             self.p_w_with_ghost.Import(self.p_w, epetra_importer, Epetra.Insert)
 
-            AminusD_w = create_matrix(self.unique_map, ["k_w"], None, self.inter_processor_edges,
-                                      self.inter_subgraph_edges)
-            AminusD_n = create_matrix(self.unique_map, ["k_n"], None, self.inter_processor_edges,
-                                      self.inter_subgraph_edges)
+            AminusD_w = create_matrix_from_graph(self.unique_map, ["k_w"], self.Epetra_graph, None,
+                                          self.inter_processor_edges, self.inter_subgraph_edges)
+
+            AminusD_n = create_matrix_from_graph(self.unique_map, ["k_n"], self.Epetra_graph, None,
+                                                 self.inter_processor_edges, self.inter_subgraph_edges)
 
             ierr = AminusD_w.Multiply(False, self.p_w, self.out_flux_w)
             assert ierr == 0

@@ -113,9 +113,15 @@ class DynamicSimulation(Simulation):
 
         self.sat_comp = DynamicSaturationComputer(self.network, self.bool_accounted_pores)
 
+        assert len(self.bc.pi_list_w_sink) == len(np.unique(self.bc.pi_list_w_sink))
+
         self.pi_nghs_of_w_sinks_interior = {}
         for pi in self.bc.pi_list_w_sink:
-            self.pi_nghs_of_w_sinks_interior[pi] = np.setdiff1d(self.network.ngh_pores[pi], self.bc.pi_list_w_sink)
+            ngh_pores_interior = np.setdiff1d(self.network.ngh_pores[pi], self.bc.pi_list_w_sink, assume_unique=True)
+            if len(ngh_pores_interior) == 0:
+                ngh_pores_interior = self.network.ngh_pores[pi]
+
+            self.pi_nghs_of_w_sinks_interior[pi] = ngh_pores_interior
 
     def advance_in_time(self, delta_t):
         """
@@ -321,17 +327,14 @@ class DynamicSimulation(Simulation):
         pi_list_sink = self.bc.pi_list_w_sink
         pi_list_source = self.bc.pi_list_w_source
         rhs_source_wett = self.q_w
-        ngh_pores = network.ngh_pores
         pi_nghs_of_w_sinks_interior = self.pi_nghs_of_w_sinks_interior
 
         # TODO: Above a certain threshold block a wetting sink using self.rhs_source_wett[pi] = 0.0
         for pi in pi_list_sink:
             pi_nghs_interior = pi_nghs_of_w_sinks_interior[pi]
-            if len(pi_nghs_interior) == 0:
-               pi_nghs_interior = ngh_pores[pi]
-            pc_max_ngh = max(p_c[pi_nghs_interior])  # For small arrays np.max is slow
+            pc_max_ngh = max(p_c.take(pi_nghs_interior))
 
-            if (p_c[pi] > 1.5 * pc_max_ngh) and (sat[pi] > 0.9):  # Heuristic that can be improved
+            if (sat[pi] > 0.9) and (p_c[pi] > 1.5 * pc_max_ngh):  # Heuristic that can be improved
                 rhs_source_wett[pi] = 0.0
                 logger.debug("freezing W sink %d. p_c: %g. Max pc_ngh: %g. sat: %g", pi, p_c[pi], pc_max_ngh,  sat[pi])
 
