@@ -187,9 +187,10 @@ def create_matrix_from_graph(unique_map, edge_attributes, graph, subnetworks=Non
             col_lists.append(vertices_1_global)
             val_lists.append(cond)
 
-    row_lists = np.concatenate(row_lists)
-    col_lists = np.concatenate(col_lists)
+    row_lists = np.concatenate(row_lists).astype(np.int32)
+    col_lists = np.concatenate(col_lists).astype(np.int32)
     val_lists = np.concatenate(val_lists)
+
 
     ierr = A.SumIntoGlobalValues(row_lists, col_lists, val_lists)
     assert ierr == 0, ierr
