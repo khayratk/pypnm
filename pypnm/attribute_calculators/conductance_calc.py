@@ -27,12 +27,10 @@ class ConductanceCalc(object):
         return A_w
 
     @staticmethod
-    def _compute_intfc_curvature(gamma, p_c, mask):
-        if len(mask) != len(p_c):
-            raise ValueError()
-        assert np.all(p_c[mask] > 0.0)
+    def _compute_intfc_curvature(gamma, p_c, pi_nwett):
+        assert np.all(p_c[pi_nwett] > 0.0)
         r_w = np.zeros_like(p_c)
-        r_w[mask] = gamma / p_c[mask]
+        r_w[pi_nwett] = gamma / p_c[pi_nwett]
 
         return r_w
 
@@ -68,45 +66,45 @@ class ConductanceCalc(object):
     @staticmethod
     def compute_conductances(fluid_properties, el_rad, el_len, el_G, el_A_tot, el_pc, invasion_status, beta=5.3):
         # Default flow resistance factor beta from  Ransohoff and Radke 1988 for square cross-section
-        nw_mask = (invasion_status == 1)
-        w_mask = (invasion_status == 0)
+        pi_nwett = (invasion_status == 1).nonzero()[0]
+        pi_wett = (invasion_status == 0).nonzero()[0]
 
         mu_n = fluid_properties['mu_n']
         mu_w = fluid_properties['mu_w']
         gamma = fluid_properties['gamma']
 
-        assert np.all(el_pc[nw_mask] > 1.0)
+        assert np.all(el_pc[pi_nwett] > 1.0)
 
-        assert len(nw_mask) == len(el_pc)
-        r_w = ConductanceCalc._compute_intfc_curvature(gamma, el_pc, nw_mask)
+        r_w = ConductanceCalc._compute_intfc_curvature(gamma, el_pc, pi_nwett)
 
         A_w = ConductanceCalc._wetting_area(r_w, el_G)
 
         A_n = np.zeros_like(A_w)
 
-        A_n[nw_mask] = (el_A_tot - A_w)[nw_mask]
+        A_n[pi_nwett] = (el_A_tot - A_w)[pi_nwett]
 
         # Mean hydraulic radii
         # R_n = 0.5 * (el_rad + np.sqrt(A_n / np.pi))
         R_w = 0.5 * (el_rad + np.sqrt(el_A_tot / np.pi))
 
-        assert np.all(el_pc[nw_mask] > gamma / el_rad[nw_mask])
+        assert np.all(el_pc[pi_nwett] > gamma / el_rad[pi_nwett])
         assert np.all(A_n >= 0)
 
         k_n = np.zeros_like(el_rad)
         k_w = np.zeros_like(el_rad)
 
+        temp = el_A_tot * (R_w**2) / el_len / 8.
         # Eq. 6,7,8  in G.Tora (2012)
-        k_n[nw_mask] = (A_n / el_A_tot * ((R_w**2) * el_A_tot / el_len / (8 * mu_n)))[nw_mask]
+        k_n[pi_nwett] = (A_n / el_A_tot * temp / mu_n)[pi_nwett]
 
         # Eq. 5 in G.Tora (2012)
-        k_w[nw_mask] = ((r_w ** 2) * A_w / el_len / (8 * mu_w * beta))[nw_mask]
+        k_w[pi_nwett] = ((r_w ** 2) * A_w / el_len / (8 * mu_w * beta))[pi_nwett]
 
         # Eq. 6,7,8  in G.Tora (2012)
-        k_w[w_mask] = ((R_w**2) * el_A_tot / el_len / (8 * mu_w))[w_mask]
+        k_w[pi_wett] = (temp /mu_w)[pi_wett]
         
-        assert np.all(R_w[w_mask] > 0.0)
-        assert np.all(k_n[nw_mask] > 0.0)
+        assert np.all(R_w[pi_wett] > 0.0)
+        assert np.all(k_n[pi_nwett] > 0.0)
         assert np.all(k_n >= 0.0)
         assert np.all(k_w > 0.0)
 

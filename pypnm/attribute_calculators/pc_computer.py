@@ -9,6 +9,7 @@ except ImportError:
     sim_settings["fluid_properties"] = dict()
     sim_settings["fluid_properties"]['gamma'] = 1.0
 
+
 class CapillaryPressureComputer(object):
     def __init__(self, network):
         self.network = network
@@ -76,11 +77,8 @@ class DynamicCapillaryPressureComputer(object):
     def sat_to_pc_func(sat, pore_rad):
         # Joekar-Niasar JFM (2010) Eq. 3.7
         gamma = sim_settings['fluid_properties']['gamma']
-        assert np.all(sat < 1.0)
-        assert np.all(sat >= 0.0)
+        assert np.all((sat < 1.0) & (sat >= 0.0))
         exp_part = np.exp(-6.83 * (1. - sat))
-        assert (not np.isnan(np.sum(exp_part)))
-        assert np.all(exp_part < 1.0)
         return 2 * gamma / (pore_rad * (1.0 - exp_part))
 
     @staticmethod
@@ -89,10 +87,9 @@ class DynamicCapillaryPressureComputer(object):
         gamma = sim_settings['fluid_properties']['gamma']
         assert (np.all(p_c > 0.0))
         exp_part = 1. - 2. * gamma / (p_c * pore_rad)
-        assert np.all(exp_part > 0.0)
         sat = 1 + np.log(exp_part) / 6.83
-        assert np.all(sat <= 1.0)
-        assert np.all(sat >= 0.0)
+        assert np.all((sat < 1.0) & (sat >= 0.0))
+
         return sat
 
     def compute(self):
@@ -104,20 +101,15 @@ class DynamicCapillaryPressureComputer(object):
         pores.p_c[:] = self.sat_to_pc_func(pores.sat, pores.r)
 
         assert np.all(pores.p_c > 0.0)
-        assert (not np.isnan(np.sum(pores.p_c)))
-        assert np.all(pores.p_c[pores.invaded == 1] > 0.0)
-
         self.set_pc_invaded_tubes()
 
     def set_pc_invaded_tubes(self):
         network = self.network
         pores_pc = self.network.pores.p_c
         edgelist = self.network.edgelist
-        mask_invaded = (network.tubes.invaded == 1)
-        network.tubes.p_c[mask_invaded] = np.maximum(pores_pc[edgelist[mask_invaded, 0]],
-                                                     pores_pc[edgelist[mask_invaded, 1]])
-
-        # assert (np.all(network.tubes.p_c[mask_invaded] > 0.0))
+        ti_invaded = (network.tubes.invaded == 1).nonzero()[0]
+        network.tubes.p_c[ti_invaded] = np.maximum(pores_pc[edgelist[ti_invaded, 0]],
+                                                     pores_pc[edgelist[ti_invaded, 1]])
 
     def get_pc(self):
         network = self.network

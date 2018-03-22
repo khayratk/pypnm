@@ -341,7 +341,7 @@ class MSRSB(object):
         max_rhs = rhs_coarse.NormInf()
         error[:] = lhs_coarse[:]-rhs_coarse[:]
         max_err = error.NormInf()
-        tol = max(max_lhs, max_rhs)*1.e-6
+        tol = max(max_lhs, max_rhs)*1.e-4
         assert np.allclose(rhs_coarse[:], lhs_coarse[:], atol=tol), "max_lhs:%e max_rhs:%e, max_error:%e " % (max_lhs, max_rhs, max_err)
 
         if conv_history:

@@ -131,6 +131,7 @@ def update_inter_invasion_status_piston_wetting(inter_edges, p_w, p_c, sat):
 
 def create_matrix_from_graph(unique_map, edge_attributes, graph, subnetworks=None, inter_processor_edges=None, inter_subgraph_edges=None):
     A = Epetra.CrsMatrix(Epetra.Copy, graph)
+    A.PutScalar(0.0)
     my_global_elements_set = set(unique_map.MyGlobalElements())
 
     row_lists = []
@@ -186,9 +187,12 @@ def create_matrix_from_graph(unique_map, edge_attributes, graph, subnetworks=Non
             col_lists.append(vertices_1_global)
             val_lists.append(cond)
 
-    for row, col, val in izip(row_lists, col_lists, val_lists):
-        ierr = A.ReplaceGlobalValues(row, col, val)
-        assert ierr == 0, ierr
+    row_lists = np.concatenate(row_lists)
+    col_lists = np.concatenate(col_lists)
+    val_lists = np.concatenate(val_lists)
+
+    ierr = A.SumIntoGlobalValues(row_lists, col_lists, val_lists)
+    assert ierr == 0, ierr
 
     A.FillComplete()
 
@@ -199,9 +203,10 @@ def create_matrix_from_graph(unique_map, edge_attributes, graph, subnetworks=Non
     A.Multiply(False, ones, x)
 
     D = Epetra.CrsMatrix(Epetra.Copy, graph)
+    D.PutScalar(0.0)
 
     row_inds = D.Map().MyGlobalElements()
-    ierr = D.ReplaceGlobalValues(row_inds, row_inds, x)
+    ierr = D.SumIntoGlobalValues(row_inds, row_inds, x)
     assert ierr == 0, ierr
 
     ierr = EpetraExt.Add(A, False, -1.0, D, 1.0)
@@ -435,9 +440,9 @@ def create_subnetwork_boundary_conditions(source_n, source_w, my_subnetworks, su
     return bc
 
 
-def create_rhs(unique_map, my_subnetworks, graph, inter_processor_edges, inter_subgraph_edges, p_c, global_source_wett,
-                 global_source_nonwett, vecformat="trilinos"):
-    A_nw = create_matrix_from_graph(unique_map, ["k_n"], graph, my_subnetworks, inter_processor_edges, inter_subgraph_edges)
+def create_rhs(unique_map, my_subnetworks, epetra_graph, inter_processor_edges, inter_subgraph_edges, p_c, global_source_wett,
+               global_source_nonwett, vecformat="trilinos"):
+    A_nw = create_matrix_from_graph(unique_map, ["k_n"], epetra_graph, my_subnetworks, inter_processor_edges, inter_subgraph_edges)
 
     source_capillary = Epetra.Vector(unique_map)
     ierr = A_nw.Multiply(False, p_c, source_capillary)

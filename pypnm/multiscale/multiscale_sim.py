@@ -254,6 +254,7 @@ class MultiscaleSim(object):
         del self.global_source_nonwett_with_ghost
 
         del self.comm
+        del self.Epetra_graph
 
         comm = Epetra.PyComm()
         output_file = open(filename+"_proc"+str(comm.MyPID()), 'wb')
@@ -294,13 +295,15 @@ class MultiscaleSim(object):
         A = create_matrix(self.unique_map, ["k_n", "k_w"], self.my_subnetworks, self.inter_processor_edges,
                           self.inter_subgraph_edges)
 
+        self.Epetra_graph = A.Graph()
+
         self.ms = MSRSB(A, self.my_subgraph_support, self.my_basis_support)
         self.ms.smooth_prolongation_operator(A, tol=self.btol)
 
         assert ierr == 0
 
     @classmethod
-    def load(cls, filename="multiscale_sim"):
+    def load(cls, filename="multiscale_sim", delta_pc=None):
         """
         loads simulation from a pkl file
 
@@ -315,6 +318,11 @@ class MultiscaleSim(object):
         ms.comm = Epetra.PyComm()
         ms.mpicomm = MPI.COMM_WORLD
         ms.re_init()
+
+        if delta_pc is not None:
+            ms.delta_pc = delta_pc
+            for simulation in ms.simulations:
+                ms.simulations[simulation].time_stepper.delta_pc = delta_pc
 
         return ms
 
