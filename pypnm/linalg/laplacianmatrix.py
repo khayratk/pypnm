@@ -214,6 +214,8 @@ class LaplacianMatrix(object):
             indices of rows for which the dirichlet boundary conditions are set
 
         """
+        #TODO: optimize this function
+
         csr_matrix.data[self._data_diag_ind[row_indices]] = 1.0
 
         mask = self.mask_from_indices(row_indices, self.N)
