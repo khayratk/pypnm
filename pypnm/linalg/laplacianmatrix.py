@@ -214,13 +214,12 @@ class LaplacianMatrix(object):
             indices of rows for which the dirichlet boundary conditions are set
 
         """
-        #TODO: optimize this function
-
         csr_matrix.data[self._data_diag_ind[row_indices]] = 1.0
 
         mask = self.mask_from_indices(row_indices, self.N)
-        data_diag_mask_bnd = (mask[self.row]) & (mask[self.col]) & self._data_diag_mask
-        data_nondiag_mask_bnd = (mask[self.row]) & np.logical_not(data_diag_mask_bnd)
+        # data_diag_mask_bnd = (mask[self.row]) & (mask[self.col]) & self._data_diag_mask
+        # data_nondiag_mask_bnd = (mask[self.row]) & np.logical_not(data_diag_mask_bnd)
+        data_nondiag_mask_bnd = np.logical_not(self._data_diag_mask) & (mask.take(self.row))
         csr_matrix.data[data_nondiag_mask_bnd] = 0.0
 
     def set_csr_singular_rows_to_dirichlet(self, csr_matrix):
