@@ -9,8 +9,8 @@ from pypnm.flow_simulation.simulation import Simulation
 
 
 class QuasiStaticSimulation(Simulation):
-    def __init__(self, network):
-        super(QuasiStaticSimulation, self).__init__(network)
+    def __init__(self, network, fluid_properties):
+        super(QuasiStaticSimulation, self).__init__(network, fluid_properties)
         self.SatComputer = QuasiStaticSaturationComputer
         self.sat_comp = self.SatComputer(network)
         self.pc_comp = CapillaryPressureComputer(network)

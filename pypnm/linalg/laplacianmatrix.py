@@ -61,9 +61,9 @@ def laplacian_from_network(network, weights=None, ind_dirichlet=None):
     Parameters
     ----------
     network: PoreNetwork
-    weights: ndarray, optional
+    weights: array_like, optional
         edge weights
-    ind_dirichlet, ndarray, optional
+    ind_dirichlet: array_like, optional
         indices of vertices where the corresponding rows in the laplacian
         will have single entries of 1.0 on the diagonal
 
@@ -195,7 +195,7 @@ class LaplacianMatrix(object):
             Weights of the network edges
 
         Notes
-        _____
+        -----
         This is currently more efficient than using scipy's inbuilt functions.
 
         """
@@ -217,8 +217,9 @@ class LaplacianMatrix(object):
         csr_matrix.data[self._data_diag_ind[row_indices]] = 1.0
 
         mask = self.mask_from_indices(row_indices, self.N)
-        data_diag_mask_bnd = (mask[self.row]) & (mask[self.col]) & self._data_diag_mask
-        data_nondiag_mask_bnd = (mask[self.row]) & np.logical_not(data_diag_mask_bnd)
+        # data_diag_mask_bnd = (mask[self.row]) & (mask[self.col]) & self._data_diag_mask
+        # data_nondiag_mask_bnd = (mask[self.row]) & np.logical_not(data_diag_mask_bnd)
+        data_nondiag_mask_bnd = np.logical_not(self._data_diag_mask) & (mask.take(self.row))
         csr_matrix.data[data_nondiag_mask_bnd] = 0.0
 
     def set_csr_singular_rows_to_dirichlet(self, csr_matrix):

@@ -47,7 +47,7 @@ def test_msrsb_two_phase():
     rhs[100] = -1e-10
     rhs += -An * p_c
 
-    sol, _, _ = solve_with_msrsb(A.indices, A.indptr, A.data, rhs, tol=1e-12)
+    sol = solve_with_msrsb(A, rhs, tol=1e-7)
 
     A[1, :] = 0.0
     A[1, 1] = 1.0
@@ -74,7 +74,7 @@ def test_msrsb_unstructured():
     rhs = np.zeros(network.nr_p)
     rhs[0] = 1e-10
     rhs[100] = -1e-10
-    sol, _, _ = solve_with_msrsb(A.indices, A.indptr, A.data, rhs, tol=1e-12)
+    sol = solve_with_msrsb(A, rhs, tol=1e-12)
 
     A[1, :] = 0.0
     A[1, 1] = 1.0
@@ -102,7 +102,8 @@ def test_msrsb_structured():
     rhs = np.zeros(network.nr_p)
     rhs[0] = 1e-10
     rhs[100] = -1e-10
-    sol, _, _ = solve_with_msrsb(A.indices, A.indptr, A.data, rhs, tol=1e-12)
+
+    sol = solve_with_msrsb(A, rhs, tol=1e-12)
 
     A[1, :] = 0.0
     A[1, 1] = 1.0

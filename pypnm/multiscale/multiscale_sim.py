@@ -25,7 +25,6 @@ except ImportError:
     sim_settings["fluid_properties"]['gamma'] = 1.0
 
 
-
 def require_path(path):
     try:
         os.makedirs(path)
@@ -57,14 +56,13 @@ def reduce_dictionary_values(key_to_scalar_distributed, mpicomm):
 
 def _create_subnetworks(network, subgraph_ids, coarse_graph, mpicomm):
     """
-    Create subnetworks for each processor given a network and partition information.
+    Create subnetworks for each processor given a pore network and partition information.
 
     Parameters
     ----------
     network: Porenetwork
-        Porenetwork from which subnetworks will be created from
-    subgraph_ids: integer ndarray
-        Vertex attribute assigning each vertex in Porenetwork to a subgraph index
+    subgraph_ids: ndarray
+        mapping from vertex id to a subgraph id
     coarse_graph: igraph
         Graph consisting of subnetworks as vertices, with edges present between two subnetworks if they are adjacent.
         Course_graph must have a [proc_id] property
@@ -86,6 +84,7 @@ def _create_subnetworks(network, subgraph_ids, coarse_graph, mpicomm):
         indices_of_subgraph = defaultdict(list)
         for i, subgraph_id in enumerate(subgraph_ids):
             indices_of_subgraph[subgraph_id].append(i)
+
         indices_of_subgraph = dict(indices_of_subgraph)
 
         for dest_id in xrange(num_proc):
@@ -94,7 +93,8 @@ def _create_subnetworks(network, subgraph_ids, coarse_graph, mpicomm):
                 if proc_ids[i] == dest_id:
                     pi_list = indices_of_subgraph[i]
                     send_dict[i] = SubNetwork(network, pi_list)
-                    assert len(network_to_igraph(send_dict[i]).components()) == 1
+                    n_components = len(network_to_igraph(send_dict[i]).components())
+                    assert n_components == 1, n_components
 
             if dest_id == 0:
                 my_subnetworks = send_dict
@@ -116,16 +116,16 @@ def _create_inter_subgraph_edgelist(graph, my_subgraph_ids, mpicomm):
     ----------
     graph: igraph
         Distributed graph with "global_id" attribute to uniquely identify vertices
-    my_subgraph_ids: numpy.ndarray
+    my_subgraph_ids: array_like
         List of subgraph ids  belonging to this processor.
-    my_id:
-        The id of this processor.
+    mpicomm: mpi4py communicator
+
     Returns
     -------
     inter_subgraph_edges: dict
         Dictionary with several keys which completely specify the pore throats as well as adjacent pore bodies.
-
     """
+
     my_id = mpicomm.rank
     subgraph_id = graph.vs["subgraph_id"]
     global_id = np.asarray(graph.vs["global_id"], dtype=np.int32)
@@ -254,14 +254,56 @@ class MultiscaleSim(object):
         del self.global_source_nonwett_with_ghost
 
         del self.comm
+        del self.Epetra_graph
 
         comm = Epetra.PyComm()
         output_file = open(filename+"_proc"+str(comm.MyPID()), 'wb')
         pickle.dump(self, output_file, protocol=pickle.HIGHEST_PROTOCOL)
         output_file.close()
+        self.re_init()
+
+    def re_init(self):
+        self.comm = Epetra.PyComm()
+        self.mpicomm = MPI.COMM_WORLD
+
+        self.unique_map, self.nonunique_map, self.subgraph_ids_vec = self.create_maps(self.graph, self.comm)
+        self.epetra_importer = Epetra.Import(self.nonunique_map, self.unique_map)
+
+        unique_map = self.unique_map
+        nonunique_map = self.nonunique_map
+
+        self.p_c = Epetra.Vector(unique_map)
+        self.p_w = Epetra.Vector(unique_map)
+        self.sat = Epetra.Vector(unique_map)
+        self.global_source_wett = Epetra.Vector(unique_map)
+        self.global_source_nonwett = Epetra.Vector(unique_map)
+        self.out_flux_w = Epetra.Vector(unique_map)
+        self.out_flux_n = Epetra.Vector(unique_map)
+
+        self.p_c_with_ghost = Epetra.Vector(nonunique_map)
+        self.p_w_with_ghost = Epetra.Vector(nonunique_map)
+        self.sat_with_ghost = Epetra.Vector(nonunique_map)
+        self.global_source_nonwett_with_ghost = Epetra.Vector(nonunique_map)
+        self.out_flux_n_with_ghost = Epetra.Vector(nonunique_map)
+        self.p_c = self._update_pc_from_subnetworks(self.p_c, self.my_subnetworks)
+        ierr = self.p_c_with_ghost.Import(self.p_c, self.epetra_importer, Epetra.Insert)
+        assert ierr == 0
+
+        self.sat = self._update_sat_from_subnetworks(self.sat, self.my_subnetworks)
+        ierr = self.sat_with_ghost.Import(self.sat, self.epetra_importer, Epetra.Insert)
+
+        A = create_matrix(self.unique_map, ["k_n", "k_w"], self.my_subnetworks, self.inter_processor_edges,
+                          self.inter_subgraph_edges)
+
+        self.Epetra_graph = A.Graph()
+
+        self.ms = MSRSB(A, self.my_subgraph_support, self.my_basis_support)
+        self.ms.smooth_prolongation_operator(A, tol=self.btol)
+
+        assert ierr == 0
 
     @classmethod
-    def load(cls, filename="multiscale_sim"):
+    def load(cls, filename="multiscale_sim", delta_pc=None):
         """
         loads simulation from a pkl file
 
@@ -275,40 +317,12 @@ class MultiscaleSim(object):
         ms = pickle.load(input_file)
         ms.comm = Epetra.PyComm()
         ms.mpicomm = MPI.COMM_WORLD
+        ms.re_init()
 
-        ms.unique_map, ms.nonunique_map, ms.subgraph_ids_vec = ms.create_maps(ms.graph, ms.comm)
-        ms.epetra_importer = Epetra.Import(ms.nonunique_map, ms.unique_map)
-
-        unique_map = ms.unique_map
-        nonunique_map = ms.nonunique_map
-
-        ms.p_c = Epetra.Vector(unique_map)
-        ms.p_w = Epetra.Vector(unique_map)
-        ms.sat = Epetra.Vector(unique_map)
-        ms.global_source_wett = Epetra.Vector(unique_map)
-        ms.global_source_nonwett = Epetra.Vector(unique_map)
-        ms.out_flux_w = Epetra.Vector(unique_map)
-        ms.out_flux_n = Epetra.Vector(unique_map)
-
-        ms.p_c_with_ghost = Epetra.Vector(nonunique_map)
-        ms.p_w_with_ghost = Epetra.Vector(nonunique_map)
-        ms.sat_with_ghost = Epetra.Vector(nonunique_map)
-        ms.global_source_nonwett_with_ghost = Epetra.Vector(nonunique_map)
-        ms.out_flux_n_with_ghost = Epetra.Vector(nonunique_map)
-        ms.p_c = cls._update_pc_from_subnetworks(ms.p_c, ms.my_subnetworks)
-        ierr = ms.p_c_with_ghost.Import(ms.p_c, ms.epetra_importer, Epetra.Insert)
-        assert ierr == 0
-
-        ms.sat = ms._update_sat_from_subnetworks(ms.sat, ms.my_subnetworks)
-        ierr = ms.sat_with_ghost.Import(ms.sat, ms.epetra_importer, Epetra.Insert)
-
-        A = create_matrix(ms.unique_map, ["k_n", "k_w"], ms.my_subnetworks, ms.inter_processor_edges,
-                          ms.inter_subgraph_edges)
-
-        ms.ms = MSRSB(A, ms.my_subgraph_support, ms.my_basis_support)
-        ms.ms.smooth_prolongation_operator(10)
-
-        assert ierr == 0
+        if delta_pc is not None:
+            ms.delta_pc = delta_pc
+            for simulation in ms.simulations:
+                ms.simulations[simulation].time_stepper.delta_pc = delta_pc
 
         return ms
 
@@ -461,12 +475,13 @@ class MultiscaleSim(object):
         self.delta_s_max = delta_s
 
     def set_p_tol(self, p_tol):
-        self.p_tol = p_tol
+        self.ptol_ms = p_tol
 
     @staticmethod
     def _update_inter_conductances(inter_edges, p_c):
-        inter_edgelist_local_1 = np.asarray([p_c.Map().LID(i) for i in inter_edges['edgelist'][0]], dtype=np.int32)
-        inter_edgelist_local_2 = np.asarray([p_c.Map().LID(i) for i in inter_edges['edgelist'][1]], dtype=np.int32)
+        epetra_map = p_c.Map()
+        inter_edgelist_local_1 = np.asarray([epetra_map.LID(i) for i in inter_edges['edgelist'][0]], dtype=np.int32)
+        inter_edgelist_local_2 = np.asarray([epetra_map.LID(i) for i in inter_edges['edgelist'][1]], dtype=np.int32)
 
         assert np.all(inter_edgelist_local_1 >= 0)
         assert np.all(inter_edgelist_local_2 >= 0)

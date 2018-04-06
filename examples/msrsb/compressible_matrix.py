@@ -1,7 +1,10 @@
 import numpy as np
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, dia_matrix
+from scipy.sparse.csgraph import connected_components
+from collections import Counter
+
 from scipy.sparse.linalg import spsolve
-from pypnm.ams.msrb_funcs import solve_with_msrsb_compressible
+from pypnm.ams.msrb_funcs import solve_with_msrsb
 
 
 def read_matrix(filepath):
@@ -26,20 +29,41 @@ def read_matrix(filepath):
         return ia, ja, a, b
 
 
+cut_off = 500
+
 ia, ja, a, b = read_matrix("compressible/DUMP_Ab.m")
-
-sol_msrsb, inds_in_large_components = solve_with_msrsb_compressible(ia, ja, a, b, v_per_subdomain=1000,
-                                                                    cut_off=200, tol=1.e-8, return_inds=True)
-
 A = csr_matrix((a, ja, ia))
-sol_scipy = spsolve(A[:, inds_in_large_components][inds_in_large_components, :], b[inds_in_large_components])
 
-sol_ref = np.zeros_like(sol_msrsb)
-sol_ref[inds_in_large_components] = sol_scipy
+diagonal = dia_matrix(((A + A.T) * np.ones(A.shape[0]), [0]), shape=A.shape)
+A_b = 0.5 * (A + A.T - diagonal)
 
-eps = 1e-10
-print sol_ref
-print sol_msrsb
+num_components, v2components = connected_components(A_b)
+component_sizes = Counter(v2components)
+large_components = {component for component in component_sizes if component_sizes[component] > cut_off}
 
-error = (sol_ref-sol_msrsb)/(sol_ref+eps)
-print np.max(error)
+inds_in_large_components = list()
+inds_in_small_components = list()
+for v, label in enumerate(v2components):
+    if label in large_components:
+        inds_in_large_components.append(v)
+    else:
+        inds_in_small_components.append(v)
+
+inds_in_large_components = np.asarray(inds_in_large_components)
+inds_in_small_components = np.asarray(inds_in_small_components)
+
+A_trunc = A[:, inds_in_large_components][inds_in_large_components, :]
+
+rhs = b[inds_in_large_components]
+
+
+sol, history = solve_with_msrsb(A_trunc, rhs, tol=1e-7, smoother="gmres", v_per_subdomain=1000, conv_history=True,
+                                    with_multiscale=True, max_iter=10000, tol_basis=1e-3, n_smooth=80,
+                                    adapt_smoothing=False, verbose=True)
+
+print "converged in", len(history["residual"])
+
+sol_ref = spsolve(A_trunc, rhs)
+
+error = np.max((sol - sol_ref)/(sol_ref+1.e-20))
+print "error is", error

@@ -55,8 +55,9 @@ def create_inter_processor_edgelist(graph, my_subgraph_ids, my_id):
 
 
 def update_inter_invasion_status_snap_off(inter_edges, p_c):
-    inter_edgelist_local_1 = np.asarray([p_c.Map().LID(i) for i in inter_edges['edgelist'][0]], dtype=np.int32)
-    inter_edgelist_local_2 = np.asarray([p_c.Map().LID(i) for i in inter_edges['edgelist'][1]], dtype=np.int32)
+    epetra_map = p_c.Map()
+    inter_edgelist_local_1 = np.asarray([epetra_map.LID(i) for i in inter_edges['edgelist'][0]], dtype=np.int32)
+    inter_edgelist_local_2 = np.asarray([epetra_map.LID(i) for i in inter_edges['edgelist'][1]], dtype=np.int32)
     assert np.all(inter_edgelist_local_1 >= 0)
     assert np.all(inter_edgelist_local_2 >= 0)
 
@@ -76,8 +77,9 @@ def update_inter_invasion_status_snap_off(inter_edges, p_c):
 
 
 def update_inter_invasion_status_piston(inter_edges, p_w, p_c, sat, outflux_n, source_nonwett):
-    pores_1 = np.asarray([p_c.Map().LID(i) for i in inter_edges['edgelist'][0]], dtype=np.int32)  # local id
-    pores_2 = np.asarray([p_c.Map().LID(i) for i in inter_edges['edgelist'][1]], dtype=np.int32)  # local id
+    epetra_map = p_c.Map()
+    pores_1 = np.asarray([epetra_map.LID(i) for i in inter_edges['edgelist'][0]], dtype=np.int32)  # local id
+    pores_2 = np.asarray([epetra_map.LID(i) for i in inter_edges['edgelist'][1]], dtype=np.int32)  # local id
     sat_crit = 0.5
     gamma = 1.0
     entry_pressure = 1.001 * JNModel.piston_entry_pressure(G=inter_edges["G"], r=inter_edges["r"], gamma=gamma)
@@ -105,8 +107,9 @@ def update_inter_invasion_status_piston(inter_edges, p_w, p_c, sat, outflux_n, s
 
 def update_inter_invasion_status_piston_wetting(inter_edges, p_w, p_c, sat):
     p_n = p_w + p_c
-    inter_edgelist_local_1 = np.asarray([p_c.Map().LID(i) for i in inter_edges['edgelist'][0]], dtype=np.int32)
-    inter_edgelist_local_2 = np.asarray([p_c.Map().LID(i) for i in inter_edges['edgelist'][1]], dtype=np.int32)
+    epetra_map = p_c.Map()
+    inter_edgelist_local_1 = np.asarray([epetra_map.LID(i) for i in inter_edges['edgelist'][0]], dtype=np.int32)
+    inter_edgelist_local_2 = np.asarray([epetra_map.LID(i) for i in inter_edges['edgelist'][1]], dtype=np.int32)
 
     sat_crit = 0.001  # Important. This has to be the same as the sat_crit in dynamic simulator
     sat_below_crit_1 = (sat[inter_edgelist_local_1] < sat_crit)
@@ -126,8 +129,101 @@ def update_inter_invasion_status_piston_wetting(inter_edges, p_w, p_c, sat):
     return inter_edges
 
 
+def create_matrix_from_graph(unique_map, edge_attributes, graph, subnetworks=None, inter_processor_edges=None, inter_subgraph_edges=None):
+    A = Epetra.CrsMatrix(Epetra.Copy, graph)
+    A.PutScalar(0.0)
+    my_global_elements_set = set(unique_map.MyGlobalElements())
+
+    row_lists = []
+    col_lists = []
+    val_lists = []
+
+    if inter_processor_edges is not None:
+        vertices_1 = inter_processor_edges['edgelist'][0]
+        vertices_2 = inter_processor_edges['edgelist'][1]
+
+        if len(vertices_1) > 0:
+            assert set(vertices_1) <= my_global_elements_set, inter_processor_edges
+            assert not set(vertices_2) <= my_global_elements_set, inter_processor_edges
+
+            for attr in edge_attributes:
+                row_lists.append(vertices_1)
+                col_lists.append(vertices_2)
+                val_lists.append(inter_processor_edges[attr])
+
+    if inter_subgraph_edges is not None:
+        vertices_1 = inter_subgraph_edges['edgelist'][0]
+        vertices_2 = inter_subgraph_edges['edgelist'][1]
+
+        assert set(vertices_1) <= my_global_elements_set, inter_subgraph_edges
+        assert set(vertices_2) <= my_global_elements_set, inter_subgraph_edges
+
+        for attr in edge_attributes:
+            row_lists.append(vertices_1)
+            col_lists.append(vertices_2)
+            val_lists.append(inter_subgraph_edges[attr])
+            row_lists.append(vertices_2)
+            col_lists.append(vertices_1)
+            val_lists.append(inter_subgraph_edges[attr])
+
+    if subnetworks is not None:
+        for i in subnetworks:
+            vertices_1_local = subnetworks[i].edgelist[:, 0]
+            vertices_2_local = subnetworks[i].edgelist[:, 1]
+            vertices_1_global = subnetworks[i].pi_local_to_global[vertices_1_local]
+            vertices_2_global = subnetworks[i].pi_local_to_global[vertices_2_local]
+
+            assert set(vertices_1_global) <= my_global_elements_set
+            assert set(vertices_2_global) <= my_global_elements_set
+
+            cond = np.zeros(subnetworks[i].tubes.nr)
+            for attr in edge_attributes:
+                cond += getattr(subnetworks[i].tubes, attr)
+
+            row_lists.append(vertices_1_global)
+            col_lists.append(vertices_2_global)
+            val_lists.append(cond)
+            row_lists.append(vertices_2_global)
+            col_lists.append(vertices_1_global)
+            val_lists.append(cond)
+
+    row_lists = np.concatenate(row_lists).astype(np.int32)
+    col_lists = np.concatenate(col_lists).astype(np.int32)
+    val_lists = np.concatenate(val_lists)
+
+
+    ierr = A.SumIntoGlobalValues(row_lists, col_lists, val_lists)
+    assert ierr == 0, ierr
+
+    A.FillComplete()
+
+    ones = Epetra.Vector(unique_map)
+    ones[:] = 1.0
+
+    x = Epetra.Vector(unique_map)
+    A.Multiply(False, ones, x)
+
+    D = Epetra.CrsMatrix(Epetra.Copy, graph)
+    D.PutScalar(0.0)
+
+    row_inds = D.Map().MyGlobalElements()
+    ierr = D.SumIntoGlobalValues(row_inds, row_inds, x)
+    assert ierr == 0, ierr
+
+    ierr = EpetraExt.Add(A, False, -1.0, D, 1.0)
+    assert ierr == 0, ierr
+
+    D.FillComplete()
+    check = sum_of_columns(D)
+    if check:
+        error = np.max(np.abs(check[:]))
+        assert error < 1.e-14, error
+
+    return D
+
+
 def create_matrix(unique_map, edge_attributes, subnetworks=None, inter_processor_edges=None, inter_subgraph_edges=None, matformat="trilinos"):
-    A = Epetra.CrsMatrix(Epetra.Copy, unique_map, 30)
+    A = Epetra.CrsMatrix(Epetra.Copy, unique_map, 50)
     my_global_elements_set = set(unique_map.MyGlobalElements())
 
     row_lists = []
@@ -196,7 +292,7 @@ def create_matrix(unique_map, edge_attributes, subnetworks=None, inter_processor
         x = Epetra.Vector(unique_map)
         A.Multiply(False, ones, x)
 
-        D = Epetra.CrsMatrix(Epetra.Copy, unique_map, 40)
+        D = Epetra.CrsMatrix(Epetra.Copy, unique_map, 50, True)
 
         row_inds = D.Map().MyGlobalElements()
         ierr = D.InsertGlobalValues(row_inds, row_inds, x)
@@ -335,14 +431,19 @@ def create_subnetwork_boundary_conditions(source_n, source_w, my_subnetworks, su
         if bc[i].no_dirichlet:
             mass_balance = bc[i].mass_balance()
             total_sources = np.sum(q_list_source_nonwett[i]) + np.sum(q_list_source_wett[i])
-            assert abs(mass_balance) < total_sources * 1.e-8, "Mass balance: %e, Total sources: %e" % (mass_balance, total_sources)
+            assert abs(mass_balance) < total_sources * 1.e-4, "Mass balance: %e, Total sources: %e" % (mass_balance, total_sources)
+
+            bc[i].scale_wetting_sources()
+            mass_balance = bc[i].mass_balance()
+            total_sources = np.sum(q_list_source_nonwett[i]) + np.sum(q_list_source_wett[i])
+            assert abs(mass_balance) < total_sources * 1.e-12, "Mass balance: %e, Total sources: %e" % (mass_balance, total_sources)
 
     return bc
 
 
-def create_rhs(unique_map, my_subnetworks, inter_processor_edges, inter_subgraph_edges, p_c, global_source_wett,
-                 global_source_nonwett, vecformat="trilinos"):
-    A_nw = create_matrix(unique_map, ["k_n"], my_subnetworks, inter_processor_edges, inter_subgraph_edges)
+def create_rhs(unique_map, my_subnetworks, epetra_graph, inter_processor_edges, inter_subgraph_edges, p_c, global_source_wett,
+               global_source_nonwett, vecformat="trilinos"):
+    A_nw = create_matrix_from_graph(unique_map, ["k_n"], epetra_graph, my_subnetworks, inter_processor_edges, inter_subgraph_edges)
 
     source_capillary = Epetra.Vector(unique_map)
     ierr = A_nw.Multiply(False, p_c, source_capillary)
@@ -357,12 +458,10 @@ def create_rhs(unique_map, my_subnetworks, inter_processor_edges, inter_subgraph
         return np.copy(b)
 
 
-def solve_multiscale(ms, A, b, p_c, p_w=None, smooth_prolongator=True, tol=1.0e-5):
-    ms.A = A
+def solve_multiscale(ms, A, b, p_w=None, smooth_prolongator=True, ptol=1.e-5, btol=1.e-2):
     if smooth_prolongator:
-        ms.smooth_prolongation_operator(niter=10)
+        ms.smooth_prolongation_operator(A, tol=btol)
     if p_w is None:
         p_w = Epetra.Vector(A.RangeMap())
-    p_w = ms.iterative_solve(b, p_w, tol=tol)
-    p_n = p_w + p_c
-    return p_n, p_w
+    p_w = ms.iterative_solve(A, b, p_w, tol=ptol)
+    return p_w

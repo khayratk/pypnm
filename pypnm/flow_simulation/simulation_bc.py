@@ -1,5 +1,6 @@
 import numpy as np
-
+import logging
+logger = logging.getLogger('pypnm.msrsb')
 
 def equal_length_args(func):
     def new_func(self, a, b):
@@ -108,3 +109,16 @@ class SimulationBoundaryCondition(object):
 
     def mass_balance(self):
         return np.sum(self.q_list_w_sink) + np.sum(self.q_list_w_source) + np.sum(self.q_list_nw_sink) + np.sum(self.q_list_nw_source)
+
+    def scale_wetting_sources(self):
+        q_net_nw = np.sum(self.q_list_nw_sink) + np.sum(self.q_list_nw_source)
+        mass_error = self.mass_balance()
+        if q_net_nw > 0:
+            prev = np.copy(self.q_list_w_sink[:])
+
+            self.q_list_w_sink[:] =  self.q_list_w_sink[:] - mass_error*self.q_list_w_sink[:]/np.sum(self.q_list_w_sink)
+            logger.debug("Wetting sinks scaled average scaling is %e", np.mean(self.q_list_w_sink[:]/prev))
+        else:
+            prev = np.copy(self.q_list_w_source[:])
+            self.q_list_w_source[:] = self.q_list_w_source[:] - mass_error*self.q_list_w_source[:]/np.sum(self.q_list_w_source)
+            logger.debug("Wetting sources scaled average scaling is %e", np.mean(self.q_list_w_source[:]/prev))

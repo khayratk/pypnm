@@ -2,7 +2,7 @@ import numpy as np
 from scipy.sparse import csc_matrix
 
 from pypnm.attribute_calculators.conductance_calc import ConductanceCalc
-from pypnm.linalg.linear_system_solver import LinearSystemStandard, LinearSystemSimple
+from pypnm.linalg.linear_system_solver import LinearSystemStandard
 from pypnm.linalg.linear_system_solver import solve_sparse_mat_mat_lu
 from pypnm.porenetwork.network_factory import cube_network
 
@@ -82,25 +82,3 @@ def test_general_dirichlet_bc():
 
     assert np.allclose(sol1, sol2)
 
-
-def test_general_dirichlet_bc_simple():
-    """
-    Test setting arbitrary dirichlet boundary condition
-    """
-    network = cube_network(N=10)
-
-    k_computer = ConductanceCalc(network)
-    k_computer.compute()
-
-    press_in = 121.1
-    press_out = 0.901
-
-    LS1 = LinearSystemSimple(network, network.tubes.k_w, [2, 92, 29], np.array([press_in, press_in, press_out]))
-    sol1 = LS1.solve()
-
-    LS2 = LinearSystemStandard(network)
-    LS2.fill_matrix(network.tubes.k_w)
-    LS2.set_dirichlet_pores([2, 92, 29], np.array([press_in, press_in, press_out]))
-    sol2 = LS2.solve()
-
-    assert np.allclose(sol1, sol2)

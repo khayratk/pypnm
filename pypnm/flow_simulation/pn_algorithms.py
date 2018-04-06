@@ -4,10 +4,10 @@ import numpy as np
 
 logger = logging.getLogger('pypnm.pn_algorithms')
 
-sat_eps = 0.001
+eps_sat = 1e-3
 
 
-def get_piston_disp_tubes(network, entry_pressure, flux_n, source_nonwett=None):
+def get_piston_disp_tubes_nonwett(network, entry_pressure, flux_n, source_nonwett=None):
     p_c = network.pores.p_c
     sat = network.pores.sat
 
@@ -52,11 +52,11 @@ def get_piston_disp_tubes(network, entry_pressure, flux_n, source_nonwett=None):
     return ti_displacement[sort_inds]
 
 
-def get_piston_disp_tubes_wett(network, entry_pressure, flux_n, source_nonwett=None):
-    if source_nonwett is None:
-        dvn_dt = - flux_n
+def get_piston_disp_tubes_wett(network, entry_pressure, flux_w, source_wett=None):
+    if source_wett is None:
+        dvw_dt = - flux_w
     else:
-        dvn_dt = source_nonwett - flux_n
+        dvw_dt = source_wett - flux_w
 
     p_n = network.pores.p_n
     sat = network.pores.sat
@@ -64,12 +64,12 @@ def get_piston_disp_tubes_wett(network, entry_pressure, flux_n, source_nonwett=N
     pores_1 = network.edgelist[:, 0]
     pores_2 = network.edgelist[:, 1]
 
-    sat_crit = sat_eps
+    sat_crit = eps_sat
     sat_below_crit_1 = (sat[pores_1] < sat_crit)
     sat_below_crit_2 = (sat[pores_2] < sat_crit)
 
-    condition1 = sat_below_crit_1 & (p_n[pores_1] > p_n[pores_2]) & (dvn_dt[pores_1] < 0.0)
-    condition2 = sat_below_crit_2 & (p_n[pores_2] > p_n[pores_1]) & (dvn_dt[pores_2] < 0.0)
+    condition1 = sat_below_crit_1 & (p_n[pores_1] > p_n[pores_2]) & (dvw_dt[pores_1] > 0.0)
+    condition2 = sat_below_crit_2 & (p_n[pores_2] > p_n[pores_1]) & (dvw_dt[pores_2] > 0.0)
 
     condition = (condition1 | condition2) & tubes_nwett
 
@@ -114,17 +114,17 @@ def invade_tube_w(network, k):
     network.tubes.invaded[k] = 0
     logger.debug("TUBE %d W INVADED by piston mechanism. Radius is %f", k, network.tubes.r[k])
 
-    if np.all(network.tubes.invaded[network.ngh_tubes[p1]] == 0) and (network.pores.sat[p1] < sat_eps):
+    if np.all(network.tubes.invaded[network.ngh_tubes[p1]] == 0) and (network.pores.sat[p1] < eps_sat):
         network.pores.invaded[p1] = 0
-        logger.debug("Pore %d Invaded with wetting phase", p1)
+        logger.debug("Pore %d Invaded with wetting phasedomain type %d ", p1, network.pore_domain_type[p1] )
 
-    if np.all(network.tubes.invaded[network.ngh_tubes[p2]] == 0) and (network.pores.sat[p2] < sat_eps):
+    if np.all(network.tubes.invaded[network.ngh_tubes[p2]] == 0) and (network.pores.sat[p2] < eps_sat):
         network.pores.invaded[p2] = 0
-        logger.debug("Pore %d Invaded with wetting phase", p1)
+        logger.debug("Pore %d Invaded with wetting phase, domain type %d", p2, network.pore_domain_type[p2])
 
 
-def update_tube_piston_w(network, entry_pressure, flux_n, source_nonwett):
-    ti_disp = get_piston_disp_tubes_wett(network, entry_pressure, flux_n, source_nonwett)
+def update_tube_piston_w(network, entry_pressure, flux_w, source_wett):
+    ti_disp = get_piston_disp_tubes_wett(network, entry_pressure, flux_w, source_wett)
     is_event = False
 
     if len(ti_disp) > 0:
@@ -181,13 +181,18 @@ def snapoff_all_tubes(network, pe_comp):
 
 def invade_pore_with_wett_phase(network, i):
     network.pores.invaded[i] = 0
-    network.pores.sat[i] = 0.0
     network.tubes.invaded[network.ngh_tubes[i]] = 0
+    logger.debug("Tubes invaded after pore wetting invaded: %s", network.ngh_tubes[i])
 
 
-def update_pore_status(network, flux_n,  bool_accounted_pores=None, source_nonwett=None):
+def update_pore_status(network, flux_w, flux_n,  bool_accounted_pores=None, source_wett=None, source_nonwett=None):
     is_event = False
     pores = network.pores
+
+    if source_wett is None:
+        dvw_dt = -flux_w
+    else:
+        dvw_dt = source_wett - flux_w
 
     if source_nonwett is None:
         dvn_dt = -flux_n
@@ -197,12 +202,12 @@ def update_pore_status(network, flux_n,  bool_accounted_pores=None, source_nonwe
     if bool_accounted_pores is None:
         bool_accounted_pores = np.ones(network.nr_p, dtype=np.bool)
 
-    pores_to_be_imbibed_mask = (pores.sat < sat_eps) & (dvn_dt<=0.0) & (pores.invaded==1) & bool_accounted_pores
+    pores_to_be_imbibed_mask = (pores.sat < eps_sat) & (dvw_dt > 0.0) & (pores.invaded == 1) & bool_accounted_pores
     pores_to_be_imbibed = np.flatnonzero(pores_to_be_imbibed_mask)
 
     for i in pores_to_be_imbibed:
         invade_pore_with_wett_phase(network, i)
-        logger.debug("Pore %d Invaded with wetting phase", i)
+        logger.debug("Pore %d Invaded with wetting phase. Domain type %d", i, network.pore_domain_type[i])
         is_event = True
 
     pores_to_be_drained_mask = (source_nonwett > 0) & (dvn_dt>0.0) & (pores.invaded==0) & bool_accounted_pores

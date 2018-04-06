@@ -7,6 +7,7 @@ from pypnm.linalg.trilinos_interface import DinvA, sum_of_columns, mat_multiply,
 from pypnm.linalg.trilinos_interface import epetra_set_matrow_to_zero, epetra_set_vecrow_to_zero
 
 logger = logging.getLogger('pypnm.msrsb')
+import warnings
 
 
 class MSRSB(object):
@@ -42,21 +43,28 @@ class MSRSB(object):
         map = self.A.RangeMap()
         self.P = self._prolongation_operator_init(map, my_restriction_supports, my_basis_supports)
         self.P_initial = Epetra.CrsMatrix(self.P)
-        self.R = self._restriction_operator_msfv(map, my_restriction_supports)
 
+        self.R = self._create_structure_matrix(map, my_restriction_supports)
         self.N = self._create_structure_matrix(map, my_basis_supports)  # Allowed nonzeros structure of P
-        self.delta_P = self._create_structure_matrix(map, my_basis_supports)
+        self.delta_P = Epetra.CrsMatrix(self.N)
         self.delta_P.PutScalar(0.0)
 
         self.num_overlaps = sum_of_columns(self.N)
 
-        self.initial_norm = mat_multiply(self.A, self.P_initial).NormFrobenius()
-
         sum_cols_P = sum_of_columns(self.P)
         assert np.allclose(sum_cols_P[:], 1.0)
 
+        a = sum_of_columns(self.R)
+        assert np.all(a[:] == 1.0)
+
     @staticmethod
     def _create_structure_matrix(row_map, my_supports, val=1.0):
+        """
+        Creates N x M matrix where N is the number of vertices in the graph and M is the number of basis functions.
+        This matrix encodes which basis function supports (which is identified by their column ids)
+        a given vertex (which is identified by row id) belongs to.
+        Note: one vertex may belong to multiple supports.
+        """
         range_map = row_map
         comm = range_map.Comm()
         domain_map = Epetra.Map(-1, my_supports.keys(), 0, comm)
@@ -76,12 +84,6 @@ class MSRSB(object):
 
         return A
 
-    @staticmethod
-    def _restriction_operator_msfv(row_map, my_restriction_supports):
-        R = MSRSB._create_structure_matrix(row_map, my_restriction_supports)
-        a = sum_of_columns(R)
-        assert np.all(a[:] == 1.0)
-        return R
 
     @staticmethod
     def _prolongation_operator_init(row_map, my_restriction_supports, my_basis_supports):
@@ -112,12 +114,17 @@ class MSRSB(object):
         assert np.all(a[:] == 1.0)
         return P
 
-    def smooth_prolongation_operator(self, niter=10):
+    def smooth_prolongation_operator(self, A, max_iter=1000, tol=1.e-2, verbose=False):
         """
         Parameters
         ----------
-        niter:
+        A: Epetra matrix
+
+        max_iter: integer
             Number of smoothing steps
+
+        verbose: bool
+            Flag to output convergence information
 
         Notes
         -----
@@ -126,18 +133,19 @@ class MSRSB(object):
         """
 
         support_matrix_copy = Epetra.CrsMatrix(self.N)
-        tau = Epetra.Vector(self.A.RangeMap())
-        J = DinvA(self.A)
+        tau = Epetra.Vector(A.RangeMap())
+        J = DinvA(A)
         ierr = 0
-        delta_P_temp = Epetra.CrsMatrix(Epetra.Copy, self.A.RangeMap(), 40)
+        delta_P_temp = Epetra.CrsMatrix(Epetra.Copy, A.RangeMap(), 40)
 
-        for _ in xrange(niter):
+        for iter_n in xrange(max_iter):
             sum_cols_P = sum_of_columns(self.P)
             assert np.allclose(sum_cols_P[:], 1.0)
 
             ierr += EpetraExt.Multiply(J, False, self.P, False, delta_P_temp)
 
-            self.delta_P.PutScalar(0.0)  # Drop entries of delta_P_temp not matching the structure of delta_P
+            # Drop entries of delta_P_temp not matching the structure of delta_P
+            self.delta_P.PutScalar(0.0)
             ierr += EpetraExt.Add(delta_P_temp, False, 1.0, self.delta_P, 1.0)  # delta_P = N*(D^-1 AP)
 
             sum_cols_delta_P = sum_of_columns(self.delta_P)
@@ -152,27 +160,40 @@ class MSRSB(object):
 
             sum_cols_delta_P = sum_of_columns(self.delta_P)
             assert np.allclose(sum_cols_delta_P[:], 0.0)
-
             ierr += EpetraExt.Add(self.delta_P, False, -0.5, self.P, 1.0)
+
+            error = self.delta_P.NormInf()
+            if error < tol:
+                break
+
+        logger.debug("Basis function error: %g. Number of iterations required: %d", error, iter_n)
+
+        if verbose:
+            print "Basis function error: %g. Number of iterations required: %d"%(error, iter_n)
 
         sum_cols_P = sum_of_columns(self.P)
 
-        assert np.allclose(sum_cols_P[:], 1.0)
+        assert np.allclose(sum_cols_P[:], 1.0, atol=1.e-1000, rtol=1e-12)
 
-        smoothness = mat_multiply(self.A, self.P).NormFrobenius() / self.initial_norm
-        logger.debug("smoothness of prolongation operator is %g", smoothness)
+        # Important numerical  step to ensure that mass is exactly conserved to machine zero
+        """
+        tau[:] = 1./sum_cols_P[:]
+        self.P.LeftScale(tau)
+        sum_cols_P = sum_of_columns(self.P)
 
+        assert np.allclose(sum_cols_P[:], 1.0, atol=1.e-1000, rtol=1.e-15)
+        """
         assert ierr == 0
 
     def __solve_one_step(self, rhs, RAP, R):
-        # Solves P*(RAP)^-1* R*rhs
+        # returns P*(RAP)^-1* R*rhs
 
         rhs_coarse = Epetra.Vector(R.DomainMap())
 
         R.Multiply(True, rhs, rhs_coarse)
 
         if not np.max(np.abs(sum_of_columns(RAP))) < RAP.NormInf() * 1e-10:
-            logger.warn("sum of matrix columns does not equal to zero")
+            warnings.warn("sum of matrix columns does not equal to zero")
 
         # Set dirichlet boundary condition at a point
         if np.max(np.abs(sum_of_columns(RAP))) < RAP.NormInf() * 1e-10:
@@ -186,6 +207,7 @@ class MSRSB(object):
 
         sol_coarse = solve_direct(RAP, rhs_coarse)
 
+
         sol_fine = Epetra.Vector(self.P.RangeMap())
         self.P.Multiply(False, sol_coarse, sol_fine)
         return sol_fine
@@ -196,14 +218,18 @@ class MSRSB(object):
         residual[:] = rhs[:] - residual[:]
         return residual
 
-    def iterative_solve(self, rhs, x0, tol=1.e-5, max_iter=200, A=None):
-        if A is None:
-            A = self.A
+    def iterative_solve(self, A, rhs, x0, tol=1.e-5, max_iter=200, n_smooth=10, smoother="gmres",
+                        conv_history=False, with_multiscale=True, adapt_smoothing=True, verbose=False):
+
+        history = dict()
+        history["n_smooth"] = []
+        history["residual"] = []
+
+        assert smoother in ["gmres", "ilu", "jacobi"]
 
         rhs_sum = rhs.Comm().SumAll(np.sum(rhs[:]))
         if not abs(rhs_sum) < abs(rhs.NormInf() * 1e-8):
             logger.warn("sum of rhs does not equal to zero")
-
 
         residual = Epetra.Vector(A.RangeMap())
 
@@ -225,59 +251,102 @@ class MSRSB(object):
         RAP_msfe = mat_multiply(self.P, AP, transpose_1=True)
 
         residual = self.__compute_residual(A, rhs, x0, residual)
-        error = self.__solve_one_step(residual, RAP_msfv, self.R)
-        x0[:] += error[:]
 
-        if residual.NormInf() / ref_residual_norm < tol:
-            logger.debug("Solution already converged before iteration")
-            return x0
+        error = Epetra.Vector(self.P.RangeMap())
+        if with_multiscale:
+            error = self.__solve_one_step(residual, RAP_msfv, self.R)
+            x0[:] += error[:]
 
-        ilu = IFPACK.ILU(self.A)
-        ilu.Initialize()
-        ilu.Compute()
+        if smoother == "ilu":
+            ilu = IFPACK.ILU(self.A)
+            ilu.Initialize()
+            ilu.Compute()
 
         residual_prev_norm = 1.e50
-        n_ilu_iter = 5
 
         solver = AztecOO.AztecOO()
-        solver.SetAztecOption(AztecOO.AZ_solver, AztecOO.AZ_bicgstab)
-        solver.SetAztecOption(AztecOO.AZ_precond, AztecOO.AZ_dom_decomp)
-        solver.SetAztecOption(AztecOO.AZ_subdomain_solve, AztecOO.AZ_ilu)
+        if smoother == "ilu":
+            solver.SetAztecOption(AztecOO.AZ_solver, AztecOO.AZ_fixed_pt)
+            solver.SetAztecOption(AztecOO.AZ_precond, AztecOO.AZ_dom_decomp)
+            solver.SetAztecOption(AztecOO.AZ_subdomain_solve, AztecOO.AZ_ilu)
+
+        if smoother == "gmres":
+            solver.SetAztecOption(AztecOO.AZ_solver, AztecOO.AZ_gmres)
+            solver.SetAztecOption(AztecOO.AZ_precond, AztecOO.AZ_dom_decomp)
+            solver.SetAztecOption(AztecOO.AZ_subdomain_solve, AztecOO.AZ_ilu)
+
+        if smoother == "jacobi":
+            solver.SetAztecOption(AztecOO.AZ_solver, AztecOO.AZ_fixed_pt)
+            solver.SetAztecOption(AztecOO.AZ_precond, AztecOO.AZ_Jacobi)
+
         solver.SetAztecOption(AztecOO.AZ_conv, AztecOO.AZ_rhs)
         solver.SetAztecOption(AztecOO.AZ_output, 0)
 
         for iteration in xrange(max_iter):
             residual = self.__compute_residual(A, rhs, x0, residual)
+
+            logger.debug("Residual at iteration %d: %g", iteration,  residual.NormInf()[0] / ref_residual_norm)
+
             error[:] = 0.0
-            solver.Iterate(A, error, residual, n_ilu_iter, 1e-20)
+            solver.Iterate(A, error, residual, n_smooth, 1e-20)
             x0[:] += error[:]
 
             residual = self.__compute_residual(A, rhs, x0, residual)
-            logger.debug("Residual at iteration %d: %g", iteration,  residual.NormInf()[0] / ref_residual_norm)
 
-            error = self.__solve_one_step(residual, RAP_msfe, self.P)
+            if with_multiscale:
+                error = self.__solve_one_step(residual, RAP_msfe, self.P)
+                x0[:] += error[:]
 
-            if residual.NormInf() / ref_residual_norm < tol:
+            if residual.NormInf()[0] / ref_residual_norm < tol:
                 logger.debug("Number of iterations for convergence: %d", iteration)
                 break
 
-            if residual.NormInf() >= residual_prev_norm:
-                n_ilu_iter *= 2
-                logger.warn("Solver stagnated, increasing number of ilu iterations to %d", n_ilu_iter)
+            if residual.NormInf()[0] >= 1.01 * residual_prev_norm and adapt_smoothing:
+                n_smooth = int(1.4 * n_smooth)
+                logger.warn("Solver stagnated, increasing number of smoothing steps to %d", n_smooth)
 
             residual_prev_norm = residual.NormInf()
 
-            x0[:] += error[:]
+            history["n_smooth"].append(n_smooth)
+            history["residual"].append(residual_prev_norm[0]/ref_residual_norm)
 
-            residual = self.__compute_residual(A, rhs, x0, residual)
-            error[:] = 0.0
-            solver.Iterate(A, error, residual, n_ilu_iter, 1e-20)
-            x0[:] += error[:]
+            if verbose:
+                print iteration, history["residual"][-1]
+
+        residual = self.__compute_residual(A, rhs, x0, residual)
+        error[:] = 0.0
+
+        solver.Iterate(A, error, residual, n_smooth, 1e-20)
+        x0[:] += error[:]
 
         residual = self.__compute_residual(A, rhs, x0, residual)
         error = self.__solve_one_step(residual, RAP_msfv, self.R)
         x0[:] += error[:]
 
-        return x0
+        history["n_smooth"].append(n_smooth)
+        history["residual"].append(residual.NormInf()[0] / ref_residual_norm)
+
+        # Check for convergence.:
+
+        lhs_fine = Epetra.Vector(A.DomainMap())
+        rhs_coarse = Epetra.Vector(self.R.DomainMap())
+        lhs_coarse = Epetra.Vector(self.R.DomainMap())
+        error = Epetra.Vector(self.R.DomainMap())
+
+        self.R.Multiply(True, rhs, rhs_coarse)
+        A.Multiply(False, x0, lhs_fine)
+        self.R.Multiply(True, lhs_fine, lhs_coarse)
+
+        max_lhs = lhs_coarse.NormInf()
+        max_rhs = rhs_coarse.NormInf()
+        error[:] = lhs_coarse[:]-rhs_coarse[:]
+        max_err = error.NormInf()
+        tol = max(max_lhs, max_rhs)*1.e-4
+        assert np.allclose(rhs_coarse[:], lhs_coarse[:], atol=tol), "max_lhs:%e max_rhs:%e, max_error:%e " % (max_lhs, max_rhs, max_err)
+
+        if conv_history:
+            return x0, history
+        else:
+            return x0
 
 

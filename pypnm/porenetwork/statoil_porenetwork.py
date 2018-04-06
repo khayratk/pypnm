@@ -2,10 +2,7 @@ import numpy as np
 
 from porenetwork import PoreNetwork
 
-try:
-    from statoil_reader.statoil_reader import StatoilReader
-except ImportError:
-    raise ImportError("Statoil reader not found")
+from pypnm.io_network.statoil_reader import StatoilReader
 
 from pores import Pores
 from tubes import Tubes

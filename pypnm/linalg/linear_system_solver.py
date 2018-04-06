@@ -8,7 +8,7 @@ from numpy.linalg import norm
 from scipy.sparse import csc_matrix
 from scipy.sparse.linalg import spsolve
 
-from pypnm.linalg.laplacianmatrix import laplacian_from_network, LaplacianMatrix
+from pypnm.linalg.laplacianmatrix import LaplacianMatrix
 from pypnm.linalg.petsc_interface import get_petsc_ksp, petsc_solve_from_ksp, petsc_solve
 
 try:
@@ -45,6 +45,38 @@ __author__ = """\n""".join(['Karim Khayrat (kkhayrat@gmail.com)'])
 
 def _ref_residual_inf(A, rhs):
     return norm(rhs - A * (rhs / A.diagonal()), ord=np.inf)
+
+
+def solve_sparse_mat_mat_from_lu(lu, B):
+    B = B.tocsc()  # Convert to csc to extract columns efficiently
+
+    # Create a sparse output matrix by repeatedly applying
+    # the sparse factorization to solve columns of b.
+    # Adapted from scipy.sparse.linalg.dsolve.linsolve
+
+    ind_of_nonzero_cols = np.unique(B.nonzero()[1])
+
+    data_segs = []
+    row_segs = []
+    col_segs = []
+    for j in ind_of_nonzero_cols:
+        Bj = B[:, j].A.ravel()
+
+        xj = lu.solve(Bj)
+
+        w = np.flatnonzero(xj)
+        segment_length = w.shape[0]
+
+        row_segs.append(w)
+        col_segs.append(np.ones(segment_length, dtype=int) * j)
+        data_segs.append(np.asarray(xj[w], dtype=B.dtype))
+
+    sparse_data = np.concatenate(data_segs)
+    sparse_row = np.concatenate(row_segs)
+    sparse_col = np.concatenate(col_segs)
+    x = csc_matrix((sparse_data, (sparse_row, sparse_col)), shape=B.shape, dtype=B.dtype)
+
+    return x
 
 
 def solve_sparse_mat_mat_lu(A, B, solver="petsc"):
@@ -111,7 +143,7 @@ def solve_sparse_mat_mat_lu(A, B, solver="petsc"):
     sparse_data = np.concatenate(data_segs)
     sparse_row = np.concatenate(row_segs)
     sparse_col = np.concatenate(col_segs)
-    x = csc_matrix((sparse_data, (sparse_row, sparse_col)), shape=B.shape, dtype=A.dtype)
+    x = csc_matrix((sparse_data, (sparse_row, sparse_col)), shape=B.shape, dtype=B.dtype)
 
     return x
 
@@ -255,36 +287,20 @@ class LinearSystemStandard(object):
         self.rhs.val[pi_list] = value
 
 
-class LinearSystemSimple(object):
-    """
-    Simplified class to hold
-    """
-    def __init__(self, network, conductances, ind_dirichlet, val_dirichlet):
+class PressureSolverDynamicDirichlet(object):
+    def __init__(self, network):
+        self.network = network
+        self.rhs_matrix = LaplacianMatrix(self.network)
+        self.rhs_matrix_csr = self.rhs_matrix.get_csr_matrix()
+        self.solver_matrix = LaplacianMatrix(self.network)
+        self.csr_solver_matrix = self.solver_matrix.get_csr_matrix()
         self.rhs = np.zeros(network.nr_p)
-        self.rhs[ind_dirichlet] = val_dirichlet
-        self.A = laplacian_from_network(network, conductances, ind_dirichlet)
         self.sol = np.zeros(network.nr_p)
 
-    def solve(self, solver="LU", x0=None, tol=1e-5):
-        A = self.A
-
-        if solver == "LU":
-            self.sol = spsolve(A=A, b=self.rhs)
-
-        elif solver == "AMG":
-            self.sol = solve_pyamg(A=A, b=self.rhs, tol=tol, x0=x0)
-
-        elif solver == "PETSC":
-            self.sol = petsc_solve(A=A, b=self.rhs, tol=tol, x0=x0)
-
-        return self.sol
-
-
-class DynamicPressureSolverMethods(object):
     def create_flux_matrix(self, cond):
-        matrix = self.laplacian
-        matrix.fill_csr_matrix_with_edge_weights(self.csr_matrix, cond)
-        return self.csr_matrix
+        matrix = self.rhs_matrix
+        matrix.fill_csr_matrix_with_edge_weights(self.rhs_matrix_csr, cond)
+        return self.rhs_matrix_csr
 
     def compute_nonwetting_flux(self):
         network = self.network
@@ -311,17 +327,6 @@ class DynamicPressureSolverMethods(object):
         assert len(source) == self.network.nr_p
         self.rhs[0:self.network.nr_p] += source
 
-
-class PressureSolverDynamicDirichlet(DynamicPressureSolverMethods):
-    def __init__(self, network):
-        self.network = network
-        self.laplacian = LaplacianMatrix(self.network)
-        self.csr_matrix = self.laplacian.get_csr_matrix()
-        self.solver_matrix = LaplacianMatrix(self.network)
-        self.csr_solver_matrix = self.solver_matrix.get_csr_matrix()
-        self.rhs = np.zeros(network.nr_p)
-        self.sol = np.zeros(network.nr_p)
-
     def __set_matrix(self, k_n, k_w):
         self.solver_matrix.fill_csr_matrix_with_edge_weights(self.csr_solver_matrix, k_n + k_w)
 
@@ -331,8 +336,8 @@ class PressureSolverDynamicDirichlet(DynamicPressureSolverMethods):
             self.rhs[pi_list] = value
 
     def set_rhs(self, k_n, p_c):
-        self.laplacian.fill_csr_matrix_with_edge_weights(self.csr_matrix, k_n)
-        A = self.csr_matrix
+        self.rhs_matrix.fill_csr_matrix_with_edge_weights(self.rhs_matrix_csr, k_n)
+        A = self.rhs_matrix_csr
         self.rhs[:] = -(A * p_c)
 
     def setup_linear_system(self, k_n, k_w, p_c):

@@ -7,7 +7,7 @@ import numpy as np
 
 import component
 from pypnm.porenetwork.constants import *
-from pypnm.postprocessing.vtk_output import VtkWriter
+from pypnm.postprocessing.vtk_output import VtkWriterNetwork
 from pypnm.util.bounding_box import BoundingBox
 
 logger = logging.getLogger('pypnm.porenetwork')
@@ -44,6 +44,22 @@ class PoreNetwork(object):
             Total void volume
         """
         return self.total_pore_vol + self.total_throat_vol
+
+
+    @property
+    def porosity(self):
+        """
+        Returns
+        _______
+        out: float
+            Porosity
+        """
+        pores = self.pores
+        len_x = np.max(pores.x) - np.min(pores.x)
+        len_y = np.max(pores.y) - np.min(pores.y)
+        len_z = np.max(pores.z) - np.min(pores.z)
+
+        return self.total_vol/(len_x * len_y *len_z)
 
     def distribute_throat_volume_to_neighboring_pores(self):
         """
@@ -269,7 +285,7 @@ class PoreNetwork(object):
 
         self._create_helper_properties()
 
-    def add_throats(self, edgelist, r=None, l=None, G=None):
+    def add_throats(self, edgelist, r=None, l=None, l_tot = None, G=None):
         """
         Adds throats to network
 
@@ -281,6 +297,8 @@ class PoreNetwork(object):
             Array of size :math:`N_t`  containing the radii of the added throats
         l: ndarray
             Array of size :math:`N_t`  containing the lengths of the added throats
+        l_tot: ndarray
+            Array of size :math:`N_t`  containing the pore to pore distance of the added throats
         G: ndarray
             Array of size :math:`N_t`  containing the shape factors of the added throats
         """
@@ -292,10 +310,13 @@ class PoreNetwork(object):
         if l is None:
             l = np.ones(nr_new_tubes) * np.mean(self.tubes.l)
 
+        if l_tot is None:
+            l_tot = l + self.pores.r[edgelist[:, 0]] + self.pores.r[edgelist[:, 1]]
+
         if G is None:
             G = np.ones(nr_new_tubes) * np.mean(self.tubes.G)
 
-        self.tubes.append_tubes(r=r, l=l, G=G)
+        self.tubes.append_tubes(r=r, l=l, G=G, l_tot = l_tot)
 
         self.edgelist = np.vstack((self.edgelist, edgelist))
 
@@ -421,7 +442,7 @@ class PoreNetwork(object):
             Name of folder in which the files will be stored
 
         """
-        vtkwriter = VtkWriter(self, folder_name)
+        vtkwriter = VtkWriterNetwork(self, folder_name)
         vtkwriter.write_vtk_binary_file(filename)
 
     def export_to_hdf(self, filename):
@@ -490,6 +511,17 @@ class PoreNetwork(object):
         filename: str
 
         """
+        import os
+        directory = os.path.dirname(filename)
+
+
+        try:
+            if not directory == '':
+                os.makedirs(directory)
+        except OSError:
+            if not os.path.isdir(directory):
+                raise
+
         output_file = open(filename, 'wb')
         pickle.dump(self, output_file, protocol=pickle.HIGHEST_PROTOCOL)
         output_file.close()

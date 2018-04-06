@@ -14,7 +14,7 @@ from pypnm.multiscale.multiscale_sim import MultiscaleSim, _create_subnetworks, 
     _network_saturation, logger
 from pypnm.multiscale.utils import update_inter_invasion_status_snap_off, create_matrix, create_rhs, solve_multiscale, \
     update_inter_invasion_status_piston, update_inter_invasion_status_piston_wetting, \
-    create_subnetwork_boundary_conditions
+    create_subnetwork_boundary_conditions, create_matrix_from_graph
 from pypnm.util.igraph_utils import network_to_igraph, coarse_graph_from_partition, support_of_basis_function, \
     graph_central_vertex
 
@@ -23,7 +23,10 @@ class MultiScaleSimUnstructured(MultiscaleSim):
     """
     Parameters
     ----------
+
     network: PoreNetwork
+    fluid_properties: dict
+        Dictionary containing entries "mu_n", "mu_w" and "gamma" used to compute the conductances of the pore throats
     num_subnetworks: int
         Number of subnetworks to split up network
     comm: Epetra communicator, optional
@@ -31,7 +34,8 @@ class MultiScaleSimUnstructured(MultiscaleSim):
     subgraph_ids: numpy array, optional
         Integer array of length network.nr_p containing the partition of the network.
     """
-    def __init__(self, network,  fluid_properties, num_subnetworks, comm=None, mpicomm=None, subgraph_ids=None):
+    def __init__(self, network,  fluid_properties, num_subnetworks, comm=None, mpicomm=None, subgraph_ids=None,
+                 delta_s_max=0.01, delta_pc=0.01, ptol_ms=1.e-6, ptol_fs=1.e-6, btol=1.e-2):
         self.network = network
 
         if comm is None:
@@ -48,7 +52,11 @@ class MultiScaleSimUnstructured(MultiscaleSim):
 
         self.num_subnetworks = num_subnetworks
 
-        # Create graph corresponding to network and another coarser graph with its vertices corresponding to subnetworks
+        # On the master cpu do the following:
+        # 1) Create graph corresponding to pore network.
+        # 2) Partition the graph into subgraphs
+        # 3) Create a coarse graph with the subgraphs as the nodes
+        # 4) Use the coarse graph to assign each subgraph to a processor
         if my_id == 0:
             self.graph = network_to_igraph(network, edge_attributes=["l", "A_tot", "r", "G"])
 
@@ -73,9 +81,9 @@ class MultiScaleSimUnstructured(MultiscaleSim):
             self.graph.vs["proc_id"] = [subgraph_id_to_proc_id[v["subgraph_id"]] for v in self.graph.vs]
 
         if my_id != 0:
-            network = None
-            self.graph = None
             coarse_graph = None
+            self.graph = None
+            network = None
             subgraph_ids = None
 
         self.coarse_graph = self.mpicomm.bcast(coarse_graph, root=0)
@@ -114,7 +122,6 @@ class MultiScaleSimUnstructured(MultiscaleSim):
         for i in self.my_subgraph_ids:
             self.my_subgraph_support[i] = self.my_subnetworks[i].pi_local_to_global
 
-
         # support region for each subgraph
         self.my_subgraph_support_with_ghosts = dict()
         for i in self.my_subgraph_ids_with_ghost:
@@ -131,7 +138,6 @@ class MultiScaleSimUnstructured(MultiscaleSim):
                                                              self.subgraph_id_to_v_center_id, self.my_subgraph_support_with_ghosts)
 
             self.my_basis_support[i] = np.intersect1d(support_vertices, my_global_elements).astype(np.int32)
-
 
         # Create distributed arrays - Note: Memory wasted here by allocating extra arrays which include ghost cells.
         # This can be optimized but the python interface for PyTrilinos is not documented well enough.
@@ -152,11 +158,20 @@ class MultiScaleSimUnstructured(MultiscaleSim):
         self.global_source_nonwett_with_ghost = Epetra.Vector(nonunique_map)
         self.out_flux_n_with_ghost = Epetra.Vector(nonunique_map)
 
+        # Simulation parameters
+        self.delta_s_max = delta_s_max
+        self.ptol_ms = ptol_ms
+        self.ptol_fs = ptol_fs
+        self.delta_pc = delta_pc
+        self.btol = btol
+
         # Crate dynamic simulations
         self.simulations = dict()
 
         for i in self.my_subgraph_ids:
-            self.simulations[i] = DynamicSimulation(self.my_subnetworks[i], self.fluid_properties)
+            self.simulations[i] = DynamicSimulation(self.my_subnetworks[i], self.fluid_properties, delta_pc=self.delta_pc,
+                                                    ptol=self.ptol_fs)
+
             self.simulations[i].solver_type = "lu"
 
             k_comp = ConductanceCalc(self.my_subnetworks[i], self.fluid_properties)
@@ -164,8 +179,6 @@ class MultiScaleSimUnstructured(MultiscaleSim):
             pc_comp = DynamicCapillaryPressureComputer(self.my_subnetworks[i])
             pc_comp.compute()
 
-        self.delta_s_max = 0.01
-        self.p_tol = 1.e-6
         self.time = 0.0
         self.stop_time = None
 
@@ -353,23 +366,26 @@ class MultiScaleSimUnstructured(MultiscaleSim):
         A = create_matrix(self.unique_map, ["k_n", "k_w"], self.my_subnetworks, self.inter_processor_edges,
                           self.inter_subgraph_edges)
 
+        self.Epetra_graph = A.Graph()
+
         self.ms = MSRSB(A, self.my_subgraph_support, self.my_basis_support)
-        self.ms.smooth_prolongation_operator(10)
+        self.ms.smooth_prolongation_operator(A, tol=self.btol)
 
     def __solve_pressure(self, smooth_prolongator=True):
-        A = create_matrix(self.unique_map, ["k_n", "k_w"], self.my_subnetworks, self.inter_processor_edges,
-                          self.inter_subgraph_edges)
-        rhs = create_rhs(self.unique_map, self.my_subnetworks, self.inter_processor_edges, self.inter_subgraph_edges,
-                         self.p_c,
-                         self.global_source_wett, self.global_source_nonwett)
+        A = create_matrix_from_graph(self.unique_map, ["k_n", "k_w"], self.Epetra_graph, self.my_subnetworks,
+                                 self.inter_processor_edges, self.inter_subgraph_edges)
+
+        rhs = create_rhs(self.unique_map, self.my_subnetworks, self.Epetra_graph, self.inter_processor_edges,
+                         self.inter_subgraph_edges, self.p_c, self.global_source_wett, self.global_source_nonwett)
 
         if self.num_subnetworks == 1:
-            self.p_w = solve_aztec(A, rhs, self.p_w, tol=1e-8)
+            self.p_w = solve_aztec(A, rhs, self.p_w, tol=1.e-9)
             self.p_n = self.p_w + self.p_c
 
         else:
-            self.p_n, self.p_w = solve_multiscale(self.ms, A, rhs, self.p_c, p_w=self.p_w,
-                                                  smooth_prolongator=smooth_prolongator, tol=self.p_tol)
+            self.p_w = solve_multiscale(self.ms, A, rhs, p_w=self.p_w, smooth_prolongator=smooth_prolongator,
+                                        ptol=self.ptol_ms, btol=self.btol)
+            self.p_n = self.p_w + self.p_c
 
         return self.p_n, self.p_w
 
@@ -377,8 +393,8 @@ class MultiScaleSimUnstructured(MultiscaleSim):
         comm = self.comm
         epetra_importer = self.epetra_importer
         simulations = self.simulations
-
         self.stop_time = self.time + delta_t
+
         while True:
             sat_current = _network_saturation(self.my_subnetworks, self.mpicomm)
             logger.info("Current Saturation of Complete Network: %g", sat_current)
@@ -409,8 +425,9 @@ class MultiScaleSimUnstructured(MultiscaleSim):
 
             self.p_w_with_ghost.Import(self.p_w, epetra_importer, Epetra.Insert)
 
-            AminusD_n = create_matrix(self.unique_map, ["k_n"], None, self.inter_processor_edges,
-                                      self.inter_subgraph_edges)
+            AminusD_n = create_matrix_from_graph(self.unique_map, ["k_n"], self.Epetra_graph, None,
+                                          self.inter_processor_edges, self.inter_subgraph_edges)
+
             ierr = AminusD_n.Multiply(False, self.p_n, self.out_flux_n)
             assert ierr == 0
             self.out_flux_n_with_ghost.Import(self.out_flux_n, epetra_importer, Epetra.Insert)
@@ -475,10 +492,11 @@ class MultiScaleSimUnstructured(MultiscaleSim):
 
             self.p_w_with_ghost.Import(self.p_w, epetra_importer, Epetra.Insert)
 
-            AminusD_w = create_matrix(self.unique_map, ["k_w"], None, self.inter_processor_edges,
-                                      self.inter_subgraph_edges)
-            AminusD_n = create_matrix(self.unique_map, ["k_n"], None, self.inter_processor_edges,
-                                      self.inter_subgraph_edges)
+            AminusD_w = create_matrix_from_graph(self.unique_map, ["k_w"], self.Epetra_graph, None,
+                                          self.inter_processor_edges, self.inter_subgraph_edges)
+
+            AminusD_n = create_matrix_from_graph(self.unique_map, ["k_n"], self.Epetra_graph, None,
+                                                 self.inter_processor_edges, self.inter_subgraph_edges)
 
             ierr = AminusD_w.Multiply(False, self.p_w, self.out_flux_w)
             assert ierr == 0
@@ -499,7 +517,8 @@ class MultiScaleSimUnstructured(MultiscaleSim):
                 self.simulations[i].set_boundary_conditions(bc[i])
                 mass_balance = bc[i].mass_balance()
                 total_sources = self.simulations[i].total_source_nonwett + self.simulations[i].total_source_wett
-                assert mass_balance < total_sources * 1.e-8, "Mass balance: %e, Total sources: %g" % (mass_balance, total_sources)
+                assert mass_balance < total_sources * 1.e-4, "Mass balance: %e, Total sources: %g" % (mass_balance, total_sources)
+                logger.debug("Mass balance: %e, Total sources: %g", mass_balance, total_sources)
 
             subgraph_id_to_nw_influx = self.compute_nonwetting_influx(simulations)
             subgraph_id_to_volume = {i: self.my_subnetworks[i].total_vol for i in self.my_subgraph_ids}
@@ -519,7 +538,7 @@ class MultiScaleSimUnstructured(MultiscaleSim):
 
             dt_sim_min = 1.0e20
 
-            logger.info("advancing simulations with timestep %g", dt)
+            logger.debug("advancing simulations with timestep %g", dt)
 
             for i in self.simulations:
                 dt_sim = self.simulations[i].advance_in_time(delta_t=dt)
@@ -550,8 +569,8 @@ class MultiScaleSimUnstructured(MultiscaleSim):
             self.comm.Barrier()
             self.time += dt_sim_min
 
-            logger.info("time is %g", self.time)
-            logger.info("stop time is %g", self.stop_time)
+            logger.debug("time is %g", self.time)
+            logger.debug("stop time is %g", self.stop_time)
 
             if np.isclose(self.time, self.stop_time):
                 break
