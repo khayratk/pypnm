@@ -68,4 +68,4 @@ for n in xrange(20):
 
 ```
 
-![Alt Text](http://media.giphy.com/media/3mJSs8JhtuqGyUEnTZ/giphy.gif)
+![Alt Text](https://media.giphy.com/media/MWOWNVu47xIwE9kNKa/giphy.gif)
