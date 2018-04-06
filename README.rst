@@ -30,5 +30,5 @@ The following code runs a quasi-static drainage simulation in a structured netwo
         network.export_to_vtk(output_filename)
 
 
-![Alt Text](https://media.giphy.com/media/3mJSs8JhtuqGyUEnTZ/giphy.gif)
+![Alt Text](http://media.giphy.com/media/3mJSs8JhtuqGyUEnTZ/giphy.gif)
 
