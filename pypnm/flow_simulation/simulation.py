@@ -9,7 +9,7 @@ from pypnm.porenetwork.backbone import BackBoneComputer
 from pypnm.porenetwork.entry_press_computer import EntryPressureComputer
 from pypnm.porenetwork.relperm import SimpleRelPermComputer
 from pypnm.porenetwork.subnetwork import SubNetworkTightlyCoupled
-from pypnm.postprocessing.vtk_output import VtkWriter
+from pypnm.postprocessing.vtk_output import VtkWriterNetwork
 from pypnm.util.bounding_box import BoundingBox
 
 logger = logging.getLogger('pypnm.simulation')
@@ -37,7 +37,7 @@ class Simulation(object):
         self.SatComputer = None
 
     def create_vtk_output_folder(self, folder_name, delete_existing_files=False):
-        self.vtk_writer = VtkWriter(self.network, folder_name, delete_existing_files)
+        self.vtk_writer = VtkWriterNetwork(self.network, folder_name, delete_existing_files)
         self.vtk_writer.add_pore_field(self.network.pores.r, "PoreRadius")
         self.vtk_writer.add_tube_field(self.network.tubes.r, "TubeRadius")
 

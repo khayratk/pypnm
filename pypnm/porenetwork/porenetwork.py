@@ -7,7 +7,7 @@ import numpy as np
 
 import component
 from pypnm.porenetwork.constants import *
-from pypnm.postprocessing.vtk_output import VtkWriter
+from pypnm.postprocessing.vtk_output import VtkWriterNetwork
 from pypnm.util.bounding_box import BoundingBox
 
 logger = logging.getLogger('pypnm.porenetwork')
@@ -442,7 +442,7 @@ class PoreNetwork(object):
             Name of folder in which the files will be stored
 
         """
-        vtkwriter = VtkWriter(self, folder_name)
+        vtkwriter = VtkWriterNetwork(self, folder_name)
         vtkwriter.write_vtk_binary_file(filename)
 
     def export_to_hdf(self, filename):

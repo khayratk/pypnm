@@ -43,6 +43,6 @@ def test_unstructured_network():
     pc_comp.compute()
     assert sat_comp.sat_nw_conn() > 0.4
 
-    from pypnm.postprocessing.vtk_output import VtkWriter
-    writer = VtkWriter(network)
+    from pypnm.postprocessing.vtk_output import VtkWriterNetwork
+    writer = VtkWriterNetwork(network)
     writer.write()

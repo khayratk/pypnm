@@ -4,13 +4,33 @@ import os
 try:
     import vtk
     from vtk.util.numpy_support import numpy_to_vtk, numpy_to_vtkIdTypeArray
-except:
+except ImportError:
     pass
 
 import numpy as np
 
 
-class VtkWriter():
+class VTKWriter(object):
+    def write_vtp(self, polydata, filename=None):
+        n = self.counter
+        if filename is None:
+            filename = self.dir_name + '/paraview' + str(n).zfill(8) + '.vtp'
+        else:
+            filename = self.dir_name + '/' + filename + '.vtp'
+
+        writer = vtk.vtkXMLPolyDataWriter()
+        writer.SetFileName(filename)
+
+        if vtk.VTK_MAJOR_VERSION <= 5:
+            writer.SetInput(polydata)
+        else:
+            writer.SetInputData(polydata)
+
+        writer.Write()
+        self.counter += 1
+
+
+class VtkWriterNetwork(VTKWriter):
     def __init__(self, network, dir_name="paraview", delete_existing_files=False):
         self.network = network
         self.counter = 0
@@ -121,26 +141,8 @@ class VtkWriter():
         array.SetName(name)
         polydata.GetPointData().AddArray(array)
 
-    def write_vtp(self, polydata, filename=None):
-        n = self.counter
-        if filename is None:
-            filename = self.dir_name + '/paraview' + str(n).zfill(8) + '.vtp'
-        else:
-            filename = self.dir_name + '/' + filename + '.vtp'
 
-        writer = vtk.vtkXMLPolyDataWriter()
-        writer.SetFileName(filename)
-
-        if vtk.VTK_MAJOR_VERSION <= 5:
-            writer.SetInput(polydata)
-        else:
-            writer.SetInputData(polydata)
-
-        writer.Write()
-        self.counter += 1
-
-
-class VTKIgraph(object):
+class VTKIgraph(VTKWriter):
     def __init__(self, graph, dir_name="vtk_igraph", delete_existing_files=False):
         self.graph = graph
         self.counter = 0
@@ -195,7 +197,10 @@ class VTKIgraph(object):
         tubes = vtk.vtkCellArray()
 
         # Points
-        coords = np.column_stack((graph.vs["x"], graph.vs["y"], graph.vs["z"]))
+        try:
+            coords = np.column_stack((graph.vs["x"], graph.vs["y"], graph.vs["z"]))
+        except KeyError:
+            coords = np.column_stack((graph.vs["x"], graph.vs["y"], np.zeros(graph.vcount())))
         points.SetData(numpy_to_vtk(coords, deep=1))
 
         # Cells
@@ -208,20 +213,10 @@ class VTKIgraph(object):
         polydata.SetLines(tubes)
         return polydata
 
-    def write_vtp(self, polydata, filename=None):
-        n = self.counter
-        if filename is None:
-            filename = self.dir_name + '/paraview' + str(n).zfill(8) + '.vtp'
-        else:
-            filename = self.dir_name + '/' + filename + '.vtp'
 
-        writer = vtk.vtkXMLPolyDataWriter()
-        writer.SetFileName(filename)
-
-        if vtk.VTK_MAJOR_VERSION <= 5:
-            writer.SetInput(polydata)
-        else:
-            writer.SetInputData(polydata)
-
-        writer.Write()
-        self.counter += 1
+    def write(self, filename=None):
+        graph = self.graph
+        self.polydata = self.polydata_from_igraph(graph)
+        self.add_point_fields()
+        self.add_edge_fields()
+        self.write_vtp(self.polydata, filename)
