@@ -1,18 +1,15 @@
-===============================================================================
-PyPNM
-===============================================================================
+# PyPNM
 
-**PyPNM** is a pore-network flow solver for quasi-static and dynamic simulations.
+PyPNM is a pore-network flow solver for quasi-static and dynamic simulations.
 
 
+# Example
 
-===============================================================================
-Example
-===============================================================================
 
 The following code runs a quasi-static drainage simulation in a structured network
 
-.. code-block:: python
+```python
+
 
     from pypnm.flow_simulation.quasi_static_simulation import QuasiStaticSimulation
     from pypnm.porenetwork.network_factory import structured_network
@@ -29,6 +26,7 @@ The following code runs a quasi-static drainage simulation in a structured netwo
         output_filename = "ip" + str(n).zfill(8)
         network.export_to_vtk(output_filename)
 
+```
 
 ![Alt Text](http://media.giphy.com/media/3mJSs8JhtuqGyUEnTZ/giphy.gif)
 
