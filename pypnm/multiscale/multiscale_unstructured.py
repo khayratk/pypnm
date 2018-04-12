@@ -18,6 +18,7 @@ from pypnm.multiscale.utils import update_inter_invasion_status_snap_off, create
 from pypnm.util.igraph_utils import network_to_igraph, coarse_graph_from_partition, support_of_basis_function, \
     graph_central_vertex
 
+from pypnm.porenetwork.subnetwork import SubNetwork
 
 class MultiScaleSimUnstructured(MultiscaleSim):
     """
@@ -58,16 +59,18 @@ class MultiScaleSimUnstructured(MultiscaleSim):
         # 3) Create a coarse graph with the subgraphs as the nodes
         # 4) Use the coarse graph to assign each subgraph to a processor
         if my_id == 0:
-            self.graph = network_to_igraph(network, edge_attributes=["l", "A_tot", "r", "G"])
+            if subgraph_ids is None:
+                _, subgraph_ids = pymetis.part_graph(num_subnetworks, network.ngh_pores)
+                subgraph_ids = np.asarray(subgraph_ids)
 
+            new_ordering = np.argsort(subgraph_ids)
+            network = self.network = SubNetwork(network, new_ordering)
+            subgraph_ids = subgraph_ids[new_ordering]
+
+            self.graph = network_to_igraph(network, edge_attributes=["l", "A_tot", "r", "G"])
             # create global_id attributes before creating subgraphs.
             self.graph.vs["global_id"] = np.arange(self.graph.vcount())
             self.graph.es["global_id"] = np.arange(self.graph.ecount())
-
-            if subgraph_ids is None:
-                _, subgraph_ids = pymetis.part_graph(num_subnetworks, self.graph.get_adjlist())
-
-            subgraph_ids = np.asarray(subgraph_ids)
             self.graph.vs["subgraph_id"] = subgraph_ids
 
             # Assign a processor id to each subgraph
@@ -113,7 +116,6 @@ class MultiScaleSimUnstructured(MultiscaleSim):
         self.my_subgraph_support = dict()
 
         my_global_elements = self.unique_map.MyGlobalElements()
-
 
         self.graph["global_to_local"] = dict((v["global_id"], v.index) for v in self.graph.vs)
         self.graph["local_to_global"] = dict((v.index, v["global_id"]) for v in self.graph.vs)

@@ -43,7 +43,6 @@ def dynamic_simulation():
 
     # Initialize solver
     simulation = DynamicSimulation(network, sim_settings["fluid_properties"], explicit=True, delta_pc=0.01)
-    simulation.press_solver_type = "petsc"
 
     # Set boundary conditions using list of pores and list of sources. Here a total inflow of q_total is used
     # distributed over the inlet and outlet pores
@@ -83,7 +82,6 @@ def dynamic_simulation():
             simulation.write_to_hdf(label=n, folder_name="paraview_dyn_run")
 
             network.save("network_history/network" + str(n).zfill(5) + ".pkl")
-            np.save("network_history/flux"+str(n).zfill(5), simulation.cum_flux)
 
             print "Nonwetting saturation:", simulation.nonwetting_saturation()
 

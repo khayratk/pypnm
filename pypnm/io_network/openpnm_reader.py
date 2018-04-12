@@ -8,6 +8,7 @@ from pypnm.porenetwork.tubes import Tubes
 from pypnm.porenetwork.constants import *
 import igraph as ig
 
+
 class OpenPnmReader(object):
     r"""
     Class for reading a Vtp file written by OpenPNM
@@ -74,7 +75,6 @@ class OpenPnmReader(object):
 
 
 class OpenPnmPoreNetwork(PoreNetwork):
-    """ Class which generates networks from the Statoil file format"""
 
     def __init__(self, filename, fix_tubes=True):
         """

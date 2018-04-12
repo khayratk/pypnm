@@ -65,6 +65,7 @@ def multiscale_simulation(restart):
         # Initialize solver
         multiscale_sim = MultiScaleSimUnstructured(network, sim_settings["fluid_properties"], num_subnetworks,
                                                    delta_s_max=0.001)
+        network = multiscale_sim.network
 
         # Set boundary conditions using list of pores and list of sources. Here a total inflow of q_total is used
         # distributed over the inlet and outlet pores

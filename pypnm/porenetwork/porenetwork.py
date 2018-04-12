@@ -61,6 +61,27 @@ class PoreNetwork(object):
 
         return self.total_vol/(len_x * len_y *len_z)
 
+    @property
+    def dim(self):
+        """
+        Returns
+        _______
+        out: tuple
+            physical dimensions of pore network
+        """
+        x_min = np.min(self.pores.x)
+        x_max = np.max(self.pores.x)
+        L_x = x_max - x_min
+
+        y_min = np.min(self.pores.y)
+        y_max = np.max(self.pores.y)
+        L_y = y_max - y_min
+
+        z_min = np.min(self.pores.z)
+        z_max = np.max(self.pores.z)
+        L_z = z_max - z_min
+        return L_x, L_y, L_z
+
     def distribute_throat_volume_to_neighboring_pores(self):
         """
         Distributes volume in throats equally among the neighboring pores (proportional according to pore volumes).
@@ -422,12 +443,15 @@ class PoreNetwork(object):
         -------
 
         """
-        bounding_box = BoundingBox(min(self.pores.x) + (max(self.pores.x) - min(self.pores.x)) * boundingbox_percent[0],
-                                   min(self.pores.x) + (max(self.pores.x) - min(self.pores.x)) * boundingbox_percent[1],
-                                   min(self.pores.y) + (max(self.pores.y) - min(self.pores.y)) * boundingbox_percent[2],
-                                   min(self.pores.y) + (max(self.pores.y) - min(self.pores.y)) * boundingbox_percent[3],
-                                   min(self.pores.z) + (max(self.pores.z) - min(self.pores.z)) * boundingbox_percent[4],
-                                   min(self.pores.z) + (max(self.pores.z) - min(self.pores.z)) * boundingbox_percent[5])
+
+        l_x, l_y, l_z = self.dim
+
+        bounding_box = BoundingBox(min(self.pores.x) + l_x * boundingbox_percent[0],
+                                   min(self.pores.x) + l_x * boundingbox_percent[1],
+                                   min(self.pores.y) + l_y * boundingbox_percent[2],
+                                   min(self.pores.y) + l_y * boundingbox_percent[3],
+                                   min(self.pores.z) + l_z * boundingbox_percent[4],
+                                   min(self.pores.z) + l_z * boundingbox_percent[5])
         self._set_zero_vol_outside_bbox(bounding_box)
 
     def export_to_vtk(self, filename, folder_name="network_vtk"):

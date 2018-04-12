@@ -78,8 +78,8 @@ class DynamicSimulation(Simulation):
 
     def reset_status(self):
         """
-        Resets the saturation in all pores as well as invasion state of all pores and tubes to those at the
-        start of the previous call to advance_in_time.
+        Resets the saturation in all pores as well as invasion state of all pores and tubes to those that were previously
+        saved with a call to save_status
         """
         self.network.pores.sat[:] = self.sat_prev
         self.network.tubes.invaded[:] = self.tube_invaded_prev
@@ -89,7 +89,18 @@ class DynamicSimulation(Simulation):
 
         self.network.pores.p_w[:] = 0.0
         self.network.pores.p_n[:] = 0.0
-        self.time = self.time_start
+        self.time = self.time_prev
+
+    def save_status(self):
+        """
+        Saves the saturation in all pores as well as invasion states of all pores and tubes
+        """
+        self.sat_prev[:] = np.copy(self.network.pores.sat)
+        self.tube_invaded_prev[:] = np.copy(self.network.tubes.invaded)
+        self.pores_invaded_prev[:] = np.copy(self.network.pores.invaded)
+
+        self.time_prev = self.time
+        self.bc_prev = copy.deepcopy(self.bc)
 
     def set_boundary_conditions(self, bc):
         """
@@ -123,7 +134,28 @@ class DynamicSimulation(Simulation):
 
             self.pi_nghs_of_w_sinks_interior[pi] = ngh_pores_interior
 
-    def advance_in_time(self, delta_t):
+    def advance_in_sat(self, delta_s, callback=None):
+        """
+        Advances the simulation to a specified time. Boundary conditions should be set before calling this function.
+
+        Parameters
+        ----------
+        delta_s: float
+            sat difference between initial state and final state of the simulation.
+
+        """
+        logger.debug("Starting simulation with time criterion")
+
+        self.stop_sat = self.sat_comp.sat_nw() + delta_s
+
+        def stop_criterion():
+            return self.sat_comp.sat_nw() >= self.stop_sat
+
+        self.save_status()
+
+        return self.__advance(stop_criterion, callback)
+
+    def advance_in_time(self, delta_t, callback=None):
         """
         Advances the simulation to a specified time. Boundary conditions should be set before calling this function.
 
@@ -140,14 +172,9 @@ class DynamicSimulation(Simulation):
         def stop_criterion():
             return self.time >= self.stop_time
 
-        self.sat_prev[:] = np.copy(self.network.pores.sat)
-        self.tube_invaded_prev[:] = np.copy(self.network.tubes.invaded)
-        self.pores_invaded_prev[:] = np.copy(self.network.pores.invaded)
+        self.save_status()
 
-        self.time_start = self.time
-        self.bc_prev = copy.deepcopy(self.bc)
-
-        return self.__advance(stop_criterion)
+        return self.__advance(stop_criterion, callback)
 
     def __set_rhs_source_arrays(self, bc):
         """
@@ -600,7 +627,7 @@ class DynamicSimulation(Simulation):
         if len(self.bc.pi_list_outlet) > 0:
             self.network.pores.p_c[self.bc.pi_list_outlet] = 0.001
 
-    def __advance(self, stop_criterion):
+    def __advance(self, stop_criterion, callback):
         self.network.pores.p_w[:] = 0.0
         self.network.pores.p_n[:] = 0.0
 
@@ -684,6 +711,7 @@ class DynamicSimulation(Simulation):
             self.accumulated_saturation += (flux_nw_inlet + flux_nw_outlet)*dt/network.total_pore_vol
             self.time += dt
 
+            self.dt = dt
             pn_max = np.max(network.pores.p_n)
             pn_min = np.min(network.pores.p_n)
 
@@ -721,6 +749,9 @@ class DynamicSimulation(Simulation):
                     logger.warning("Initial nonwetting source was  %e", self.q_n_tot_source)
                     logger.warning("Initial nonwetting sink was  %e", self.q_n_tot_sink)
                     break
+
+            if callback is not None:
+                callback(self)
 
             counter += 1
 
