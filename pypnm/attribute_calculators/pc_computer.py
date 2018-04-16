@@ -1,6 +1,6 @@
-from pypnm.porenetwork.constants import *
 import numpy as np
-from pypnm.porenetwork.pore_element_models import BasePEModel
+from pypnm.porenetwork.constants import *
+from pypnm.porenetwork.pore_element_models import BasePEModel, JNModel
 
 try:
     from sim_settings import *
@@ -23,9 +23,9 @@ class CapillaryPressureComputer(object):
 
         self.set_constant_pc_from_pc_field()
 
-        pores.p_c[pores.invaded == 1] = np.maximum(1.000001*BasePEModel.snap_off_pressure(gamma=gamma,
-                                                                                     r=pores.r[pores.invaded == 1]),
-                                                   pores.p_c[pores.invaded == 1])
+        eps = 1.e-6
+        snap_off_press = BasePEModel.snap_off_pressure(gamma=gamma, r=pores.r[pores.invaded == 1])
+        pores.p_c[pores.invaded == 1] = np.maximum((1. + eps) * snap_off_press, pores.p_c[pores.invaded == 1])
         self.p_c = max(self.p_c, np.max(pores.p_c))
         self.compute()
 
@@ -75,22 +75,11 @@ class DynamicCapillaryPressureComputer(object):
 
     @staticmethod
     def sat_to_pc_func(sat, pore_rad):
-        # Joekar-Niasar JFM (2010) Eq. 3.7
-        gamma = sim_settings['fluid_properties']['gamma']
-        assert np.all((sat < 1.0) & (sat >= 0.0))
-        exp_part = np.exp(-6.83 * (1. - sat))
-        return 2 * gamma / (pore_rad * (1.0 - exp_part))
+        return JNModel.sat_to_pc_func(r=pore_rad, sat=sat, gamma=sim_settings['fluid_properties']['gamma'])
 
     @staticmethod
     def pc_to_sat_func(pore_rad, p_c):
-        # Inverse of sat_to_pc_func
-        gamma = sim_settings['fluid_properties']['gamma']
-        assert (np.all(p_c > 0.0))
-        exp_part = 1. - 2. * gamma / (p_c * pore_rad)
-        sat = 1 + np.log(exp_part) / 6.83
-        assert np.all((sat < 1.0) & (sat >= 0.0))
-
-        return sat
+        return JNModel.pc_to_sat_func(r=pore_rad, p_c=p_c, gamma=sim_settings['fluid_properties']['gamma'])
 
     def compute(self):
         network = self.network
@@ -109,7 +98,7 @@ class DynamicCapillaryPressureComputer(object):
         edgelist = self.network.edgelist
         ti_invaded = (network.tubes.invaded == 1).nonzero()[0]
         network.tubes.p_c[ti_invaded] = np.maximum(pores_pc[edgelist[ti_invaded, 0]],
-                                                     pores_pc[edgelist[ti_invaded, 1]])
+                                                   pores_pc[edgelist[ti_invaded, 1]])
 
     def get_pc(self):
         network = self.network

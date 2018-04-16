@@ -462,6 +462,9 @@ class DynamicSimulation(Simulation):
 
     def __compute_time_step(self):
         assert np.all(self.network.pores.invaded[self.q_n > 0.0] == 1)
+        gamma = self.fluid_properties["gamma"]
+        JNModel.pc_to_sat_func(p_c=self.network.pores.p_c, gamma=gamma, r=self.network.pores.r)
+
         dt, dt_details = self.time_stepper.timestep(flux_n=self.flux_n, source_nonwett=self.q_n)
 
         STOP_FLAG = False
@@ -625,7 +628,11 @@ class DynamicSimulation(Simulation):
             self.network.pores.p_c[self.bc.pi_list_inlet] = self.bc.press_inlet_nw - self.bc.press_inlet_w
 
         if len(self.bc.pi_list_outlet) > 0:
-            self.network.pores.p_c[self.bc.pi_list_outlet] = 0.001
+            gamma = self.fluid_properties['gamma']
+            pi_out = self.bc.pi_list_outlet
+            self.network.pores.p_c[pi_out] = JNModel.sat_to_pc_func(sat=1.e-7, gamma=gamma, r=self.network.pores.r[pi_out])
+
+        JNModel.pc_to_sat_func(p_c=self.network.pores.p_c, gamma=gamma, r=self.network.pores.r)
 
     def __advance(self, stop_criterion, callback):
         self.network.pores.p_w[:] = 0.0
@@ -680,6 +687,8 @@ class DynamicSimulation(Simulation):
             if self.bc.no_dirichlet:
                 assert np.isclose(self.q_w_tot, np.sum(self.q_w), atol=max(abs(self.q_w_tot) * 1e-5, 1e-14)), "%g %g %d" % (self.q_w_tot, np.sum(self.q_w), counter)
 
+            gamma = self.fluid_properties["gamma"]
+            JNModel.pc_to_sat_func(p_c=self.network.pores.p_c, gamma=gamma, r=self.network.pores.r)
             logger.debug("Computing time step")
             dt, dt_details = self.__compute_time_step()
 
@@ -691,8 +700,8 @@ class DynamicSimulation(Simulation):
             else:
                 dt = self.__update_saturation_implicit(dt=dt)
 
-            pi_1 = network.edgelist[:,0]
-            pi_2 = network.edgelist[:,1]
+            pi_1 = network.edgelist[:, 0]
+            pi_2 = network.edgelist[:, 1]
             self.cum_flux_tubes += (network.pores.p_n[pi_1] - network.pores.p_n[pi_2]) * network.tubes.k_n * dt
 
             _plist = self.bc.pi_list_inlet

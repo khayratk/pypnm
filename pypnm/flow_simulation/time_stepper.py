@@ -117,6 +117,12 @@ class DynamicTimeStepper(object):
 
         assert np.all(network.pores.invaded[mask_drain] == NWETT)
 
+        self.pc_model.pc_to_sat_func(r=network.pores.r[mask_drain],
+                                     p_c=network.pores.p_c[mask_drain] * 1.,
+                                     gamma=sim_settings['fluid_properties']['gamma'],
+                                     G=network.pores.G,
+                                     A_tot=network.pores.A_tot)
+
         sat_max_pc_increment = self.pc_model.pc_to_sat_func(r=network.pores.r[mask_drain],
                                                             p_c=network.pores.p_c[mask_drain] * (1+delta_pc),
                                                             gamma=sim_settings['fluid_properties']['gamma'],

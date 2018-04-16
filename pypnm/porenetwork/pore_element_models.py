@@ -28,19 +28,28 @@ class JNModel(BasePEModel):
     """
     Implementation of local pc-sat pc_model as given in Joekar-Niasar JFM (2010)
     """
+
     @classmethod
     def pc_to_sat_func(cls, **kwargs):
         pore_rad = kwargs['r']
         p_c = kwargs['p_c']
         gamma = kwargs['gamma']
 
+        assert np.all(p_c > 0.0)
+
         exp_part = 1. - 2. * gamma / (p_c * pore_rad)
+
+        assert np.all(exp_part > 0.0), exp_part[exp_part <= 0.0]
+
         sat = 1 + np.log(exp_part) / 6.83
 
-        assert np.all(p_c > 0.0)
-        assert np.all(exp_part > 0.0)
-        assert np.all(sat <= 1.0)
-        assert np.all(sat >= 0.0)
+        try:
+            sat[abs(sat) < 1e-10] = 0.0
+        except TypeError:
+            if abs(sat) < 1.e-10:
+                sat = 0.0
+
+        assert np.all((sat < 1.0) & (sat >= 0.0)), sat[sat < 0.0]
 
         return sat
 
@@ -48,16 +57,17 @@ class JNModel(BasePEModel):
     def sat_to_pc_func(cls, **kwargs):
         # Joekar-Niasar JFM (2010) Eq. 3.7
         sat = kwargs['sat']
+        assert np.all((sat < 1.0) & (sat >= 0.0))
+
         pore_rad = kwargs['r']
         gamma = kwargs['gamma']
 
         exp_part = np.exp(-6.83 * (1. - sat))
-        pc = 2 * gamma / (pore_rad * (1.0 - exp_part))
-        assert (not np.isnan(np.sum(exp_part)))
-        assert np.all(exp_part < 1.0)
-        assert np.all(sat < 1.0)
-        assert np.all(sat >= 0.0)
+        assert np.all(exp_part < 1.0), exp_part[exp_part >= 0.0]
 
+        pc = 2 * gamma / (pore_rad * (1.0 - exp_part))
+
+        assert (not np.isnan(np.sum(exp_part)))
         np.all(pc >= 0.0)
 
         return pc
@@ -67,6 +77,7 @@ class ToraModel(BasePEModel):
     """
     Implementation of local pc-sat pc_model as given in Tora JFM (2012)
     """
+
     @classmethod
     def pc_to_sat_func(cls, **kwargs):
         p_c = kwargs['p_c']
@@ -92,13 +103,13 @@ class ToraModel(BasePEModel):
 
 
 def throat_diameter_acharya(network, p_1, p_2, l_tot, n):
-    r1, r2 = network.pores.r[p_1]/l_tot, network.pores.r[p_2]/l_tot
-    sin = np.sin(np.pi/4.0)
-    cos = np.cos(np.pi/4.0)
+    r1, r2 = network.pores.r[p_1] / l_tot, network.pores.r[p_2] / l_tot
+    sin = np.sin(np.pi / 4.0)
+    cos = np.cos(np.pi / 4.0)
 
-    rho1 = r1*sin/(1.-r1*cos)**n
-    rho2 = r2*sin/(1.-r2*cos)**n
+    rho1 = r1 * sin / (1. - r1 * cos) ** n
+    rho2 = r2 * sin / (1. - r2 * cos) ** n
 
-    r_t_norm = rho1*rho2*(rho1**(1./n) + rho2**(1./n))**(-n)
+    r_t_norm = rho1 * rho2 * (rho1 ** (1. / n) + rho2 ** (1. / n)) ** (-n)
 
-    return r_t_norm*l_tot
+    return r_t_norm * l_tot
