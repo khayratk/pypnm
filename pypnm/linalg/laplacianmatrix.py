@@ -203,7 +203,7 @@ class LaplacianMatrix(object):
         csr_matrix.data[self._data_nondiag_ind] = -weights.take(self._edge_to_data_ind, axis=0)
         csr_matrix.data[self._data_diag_ind] = csr_matrix * self.m_ones
 
-    def set_csr_matrix_rows_to_dirichlet(self, csr_matrix, row_indices):
+    def set_csr_matrix_rows_to_dirichlet(self, csr_matrix, row_indices, val=1.0):
         """
         Deletes selected rows in matrix and inserts 1.0 on their diagonal entries
 
@@ -214,7 +214,7 @@ class LaplacianMatrix(object):
             indices of rows for which the dirichlet boundary conditions are set
 
         """
-        csr_matrix.data[self._data_diag_ind[row_indices]] = 1.0
+        csr_matrix.data[self._data_diag_ind[row_indices]] = val
 
         mask = self.mask_from_indices(row_indices, self.N)
         # data_diag_mask_bnd = (mask[self.row]) & (mask[self.col]) & self._data_diag_mask

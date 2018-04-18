@@ -1,3 +1,4 @@
+
 import pyamg
 
 import logging
@@ -6,7 +7,6 @@ import sys
 import numpy as np
 from numpy.linalg import norm
 from scipy.sparse import csc_matrix
-from scipy.sparse.linalg import spsolve
 
 from pypnm.linalg.laplacianmatrix import LaplacianMatrix
 from pypnm.linalg.petsc_interface import get_petsc_ksp, petsc_solve_from_ksp, petsc_solve
@@ -33,6 +33,7 @@ try:
 except ImportError:
     pass
 
+
 import pyximport
 
 pyximport.install(setup_args={"include_dirs": np.get_include()},
@@ -44,7 +45,13 @@ __author__ = """\n""".join(['Karim Khayrat (kkhayrat@gmail.com)'])
 
 
 def _ref_residual_inf(A, rhs):
-    return norm(rhs - A * (rhs / A.diagonal()), ord=np.inf)
+    x_1 = rhs / A.diagonal()
+    B = csc_matrix(A)
+    B.setdiag(0.0)
+    x_2 = (rhs-B*x_1)/A.diagonal()
+    ref_residual = norm(rhs - A * x_2, ord=np.inf)
+    assert ref_residual > 1e-16
+    return ref_residual
 
 
 def solve_sparse_mat_mat_from_lu(lu, B):
@@ -105,7 +112,7 @@ def solve_sparse_mat_mat_lu(A, B, solver="petsc"):
     Ignores zero columns in B, and hence is faster than the existing scipy implementation
     """
 
-    sf = 1.e30  # scaling factor for petsc
+    sf = 1.e15  # scaling factor for petsc
 
     assert solver in ["petsc", "scipy"]
 
@@ -332,8 +339,8 @@ class PressureSolverDynamicDirichlet(object):
 
     def set_dirichlet_pores(self, pi_list, value):
         if len(pi_list) > 0:
-            self.solver_matrix.set_csr_matrix_rows_to_dirichlet(self.csr_solver_matrix, pi_list)
-            self.rhs[pi_list] = value
+            self.solver_matrix.set_csr_matrix_rows_to_dirichlet(self.csr_solver_matrix, pi_list, val=1.e-16)
+            self.rhs[pi_list] = value*1.e-16
 
     def set_rhs(self, k_n, p_c):
         self.rhs_matrix.fill_csr_matrix_with_edge_weights(self.rhs_matrix_csr, k_n)

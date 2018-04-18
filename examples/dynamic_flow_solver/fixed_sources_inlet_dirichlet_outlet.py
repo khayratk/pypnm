@@ -25,7 +25,7 @@ def dynamic_simulation():
         network = PoreNetwork.load("network.pkl")
     except IOError:
         # Generate small unstructured network.
-        network = structured_network(20, 10, 10, periodic=True)
+        network = unstructured_network_periodic_y(10000, quasi_2d=True)
         network = remove_tubes_between_face_pores(network, EAST)
         network = remove_tubes_between_face_pores(network, WEST)
         pi_inlet = network.pi_list_face[WEST]

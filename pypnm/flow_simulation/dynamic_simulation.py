@@ -31,6 +31,7 @@ class DynamicSimulation(Simulation):
         if np.any(network.tubes.vol != 0.0):
             raise ValueError("Network throats have to all have zero volume for dynamic flow solver")
 
+        self.delta_pc = delta_pc
         self.press_solve_tol = ptol
         self.explicit = explicit
         self.fluid_properties = fluid_properties
@@ -123,6 +124,7 @@ class DynamicSimulation(Simulation):
         self.bool_accounted_pores[self.bc.pi_list_outlet] = 0  # Ignore saturation for pressure boundary conditions
 
         self.sat_comp = DynamicSaturationComputer(self.network, self.bool_accounted_pores)
+        self.time_stepper = DynamicTimeStepper(self.network, self.bool_accounted_pores, delta_pc=self.delta_pc)
 
         assert len(self.bc.pi_list_w_sink) == len(np.unique(self.bc.pi_list_w_sink))
 
@@ -462,8 +464,6 @@ class DynamicSimulation(Simulation):
 
     def __compute_time_step(self):
         assert np.all(self.network.pores.invaded[self.q_n > 0.0] == 1)
-        gamma = self.fluid_properties["gamma"]
-        JNModel.pc_to_sat_func(p_c=self.network.pores.p_c, gamma=gamma, r=self.network.pores.r)
 
         dt, dt_details = self.time_stepper.timestep(flux_n=self.flux_n, source_nonwett=self.q_n)
 
@@ -632,7 +632,6 @@ class DynamicSimulation(Simulation):
             pi_out = self.bc.pi_list_outlet
             self.network.pores.p_c[pi_out] = JNModel.sat_to_pc_func(sat=1.e-7, gamma=gamma, r=self.network.pores.r[pi_out])
 
-        JNModel.pc_to_sat_func(p_c=self.network.pores.p_c, gamma=gamma, r=self.network.pores.r)
 
     def __advance(self, stop_criterion, callback):
         self.network.pores.p_w[:] = 0.0
@@ -688,7 +687,7 @@ class DynamicSimulation(Simulation):
                 assert np.isclose(self.q_w_tot, np.sum(self.q_w), atol=max(abs(self.q_w_tot) * 1e-5, 1e-14)), "%g %g %d" % (self.q_w_tot, np.sum(self.q_w), counter)
 
             gamma = self.fluid_properties["gamma"]
-            JNModel.pc_to_sat_func(p_c=self.network.pores.p_c, gamma=gamma, r=self.network.pores.r)
+
             logger.debug("Computing time step")
             dt, dt_details = self.__compute_time_step()
 

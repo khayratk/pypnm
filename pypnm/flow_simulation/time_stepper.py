@@ -113,32 +113,27 @@ class DynamicTimeStepper(object):
         network = self.network
         pores = network.pores
 
-        mask_drain = (dvn_dt > 0.0) & self.accounted_pores
+        pi_drain = ((dvn_dt > 0.0) & self.accounted_pores).nonzero()[0]
 
-        assert np.all(network.pores.invaded[mask_drain] == NWETT)
+        assert np.all(network.pores.invaded[pi_drain] == NWETT)
 
-        self.pc_model.pc_to_sat_func(r=network.pores.r[mask_drain],
-                                     p_c=network.pores.p_c[mask_drain] * 1.,
-                                     gamma=sim_settings['fluid_properties']['gamma'],
-                                     G=network.pores.G,
-                                     A_tot=network.pores.A_tot)
-
-        sat_max_pc_increment = self.pc_model.pc_to_sat_func(r=network.pores.r[mask_drain],
-                                                            p_c=network.pores.p_c[mask_drain] * (1+delta_pc),
+        sat_max_pc_increment = self.pc_model.pc_to_sat_func(r=network.pores.r[pi_drain],
+                                                            p_c=network.pores.p_c[pi_drain] * (1+delta_pc),
                                                             gamma=sim_settings['fluid_properties']['gamma'],
                                                             G=network.pores.G,
                                                             A_tot=network.pores.A_tot)
 
         sat_max = np.maximum(sat_max_pc_increment, 0.1)
 
-        if np.any(mask_drain):
-            wett_vol = pores.vol[mask_drain] * (1. - pores.sat[mask_drain])
-            nwett_vol_double = pores.vol[mask_drain] * np.maximum(pores.sat[mask_drain], 0.2)
-            nwett_vol_max = pores.vol[mask_drain] * (sat_max - pores.sat[mask_drain])
+        if len(pi_drain)>0:
+            wett_vol = pores.vol[pi_drain] * (1. - pores.sat[pi_drain])
+            nwett_vol_double = pores.vol[pi_drain] * np.maximum(pores.sat[pi_drain], 0.2)
+            nwett_vol_max = pores.vol[pi_drain] * (sat_max - pores.sat[pi_drain])
 
-            dt_pore_drain = np.min(wett_vol / dvn_dt[mask_drain])
-            dt_sat_n_double = np.min(nwett_vol_double / dvn_dt[mask_drain])
-            dt_sat_n_max = np.min(nwett_vol_max / dvn_dt[mask_drain])
+            dt_pore_drain = np.min(wett_vol / dvn_dt[pi_drain])
+            dt_sat_n_double = np.min(nwett_vol_double / dvn_dt[pi_drain])
+
+            dt_sat_n_max = np.min(nwett_vol_max / dvn_dt[pi_drain])
 
             assert dt_pore_drain > dt_sat_n_max
 
@@ -146,6 +141,8 @@ class DynamicTimeStepper(object):
                          dt_pore_drain, dt_sat_n_double, dt_sat_n_max)
 
         dt_drain = min(dt_pore_drain, dt_sat_n_double, dt_sat_n_max)
+
+        assert dt_drain >= 0, "Drainage time steps are: dt_pore_drain: %e, dt_sat_n_double: %e, pc_crit_drain: %e"%(dt_pore_drain, dt_sat_n_double, dt_sat_n_max)
 
         if dt_drain == 0.0:
             sys.stderr.write("Time Step for drainage is zero!!! \n")
@@ -163,7 +160,7 @@ class DynamicTimeStepper(object):
         dt_details = dt_drain_details.copy()
         dt_details.update(dt_imb_details)
 
-        assert dt >= 0.0
+        assert dt >= 0.0, "Time step is negative. dt_drain: %e dt_imb %e"%(dt_drain, dt_imb)
 
         logger.debug("Time step is %e. dt_drain: %e, dt_imb: %e", dt, dt_drain, dt_imb)
 
