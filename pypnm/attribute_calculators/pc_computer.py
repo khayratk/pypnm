@@ -84,12 +84,11 @@ class DynamicCapillaryPressureComputer(object):
     def compute(self):
         network = self.network
         pores = network.pores
-        network.pores.p_c[:] = 0.0
-        network.tubes.p_c[:] = 0.0
 
         pores.p_c[:] = self.sat_to_pc_func(pores.sat, pores.r)
-
         assert np.all(pores.p_c > 0.0)
+
+        network.tubes.p_c[:] = 0.0
         self.set_pc_invaded_tubes()
 
     def set_pc_invaded_tubes(self):

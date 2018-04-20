@@ -36,11 +36,11 @@ class SimulationBoundaryCondition(object):
         self.pi_list_w_sink = []
         self.q_list_w_sink = []
 
-        self.pi_list_inlet = []
+        self.pi_list_press_inlet = []
         self.press_inlet_w = []
         self.press_inlet_nw = []
 
-        self.pi_list_outlet = []
+        self.pi_list_press_outlet = []
         self.press_outlet_w = []
 
         self.no_dirichlet = True
@@ -52,24 +52,26 @@ class SimulationBoundaryCondition(object):
                 + "self.q_list_w_source \n" + str(self.q_list_w_source) + str(np.sum(self.q_list_w_source)) + "\n"
                 + "self.pi_list_w_sink \n" + str(self.pi_list_w_sink) + "\n"
                 + "self.q_list_w_sink \n" + str(self.q_list_w_sink) + str(self.q_list_w_sink.sum()) + "\n"
-                + "self.pi_list_inlet \n" + str(self.pi_list_inlet) + "\n"
+                + "self.pi_list_press_inlet \n" + str(self.pi_list_press_inlet) + "\n"
                 + "self.press_inlet_w \n" + str(self.press_inlet_w) + "\n"
                 + "self.press_inlet_nw \n" + str(self.press_inlet_nw) + "\n"
-                + "self.pi_list_outlet \n" + str(self.pi_list_outlet) + "\n"
+                + "self.pi_list_press_outlet \n" + str(self.pi_list_press_outlet) + "\n"
                 + "self.press_outlet_w \n" + str(self.press_outlet_w) + "\n")
 
     def set_pressure_inlet(self, pi_list, p_wett, p_nwett):
         assert len(pi_list) == len(np.unique(pi_list))
-        self.pi_list_inlet = np.copy(pi_list).astype(np.int)
+        self.pi_list_press_inlet = np.copy(pi_list).astype(np.int)
         self.press_inlet_w = p_wett
         self.press_inlet_nw = p_nwett
         self.no_dirichlet = False
+        self.check_pressure_inout_nonoverlap()
 
     def set_pressure_outlet(self, pi_list, p_wett):
         assert len(pi_list) == len(np.unique(pi_list))
-        self.pi_list_outlet = np.copy(pi_list).astype(np.int)
+        self.pi_list_press_outlet = np.copy(pi_list).astype(np.int)
         self.press_outlet_w = p_wett
         self.no_dirichlet = False
+        self.check_pressure_inout_nonoverlap()
 
     @equal_length_args
     @unique_first_argument
@@ -106,6 +108,9 @@ class SimulationBoundaryCondition(object):
     def check_sink_source_nonoverlap(self):
         assert len(np.intersect1d(self.pi_list_nw_source, self.pi_list_nw_sink)) == 0
         assert len(np.intersect1d(self.pi_list_w_source, self.pi_list_w_sink)) == 0
+
+    def check_pressure_inout_nonoverlap(self):
+        assert len(np.intersect1d(self.pi_list_press_inlet, self.pi_list_press_outlet)) == 0
 
     def mass_balance(self):
         return np.sum(self.q_list_w_sink) + np.sum(self.q_list_w_source) + np.sum(self.q_list_nw_sink) + np.sum(self.q_list_nw_source)

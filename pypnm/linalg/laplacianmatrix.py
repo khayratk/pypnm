@@ -110,7 +110,7 @@ class LaplacianMatrix(object):
     network: PoreNetwork
 
     Notes
-    _____
+    ----------
     This class when several laplacian matrices need to be created with the same structure
     """
 
