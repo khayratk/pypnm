@@ -23,7 +23,44 @@ def get_adjlist(A):
     return adjlist
 
 
-def _laplacian(edgelist, weights=None, ind_dirichlet=None):
+def flow_matrix_from_graph(graph, press, cond, ind_dirichlet=None, val_dirichlet=1.0):
+    edges = graph.get_edgelist()
+    edges = zip(*edges)
+    rows = edges[0]
+    cols = edges[1]
+
+    press = np.asarray(press)
+    cond = np.asarray(cond)
+
+    nv = max(np.max(rows), np.max(cols)) + 1
+
+    # Make matrix symmetric
+    rows, cols = np.hstack((rows, cols)), np.hstack((cols, rows))
+    cond = np.hstack((cond,cond))
+
+    data = np.maximum((press[rows]-press[cols])*cond, 0.0)
+
+    diagonal_dirichlet = np.zeros(nv)
+
+    off_diag = csr_matrix((data, (rows, cols)), shape=(nv, nv))
+
+    diag = eye(nv, format="csr")
+    diag.setdiag(-(off_diag*np.ones(nv)))
+
+    B = coo_matrix((off_diag+diag).T)
+
+    if ind_dirichlet is not None:
+        mask = np.zeros(nv, dtype=np.bool)
+        mask[ind_dirichlet] = True
+        mask_rows = mask[B.row]  # Selects all the entries belonging to rows which have a dirichlet value
+        B.data[mask_rows] = 0.0
+        diagonal_dirichlet[ind_dirichlet] = val_dirichlet
+
+
+    return csr_matrix(B)
+
+
+def _laplacian(edgelist, weights=None, ind_dirichlet=None, val_dirichlet=1.0):
     rows = edgelist[0]
     cols = edgelist[1]
     nv = max(np.max(rows), np.max(cols)) + 1
@@ -46,7 +83,7 @@ def _laplacian(edgelist, weights=None, ind_dirichlet=None):
         mask_rows = mask[rows]  # Selects all the entries belonging to rows which have a dirichlet value
         data[mask_rows] = 0.0
 
-        diagonal_dirichlet[ind_dirichlet] = 1.0
+        diagonal_dirichlet[ind_dirichlet] = val_dirichlet
 
     off_diag = csr_matrix((data, (rows, cols)), shape=(nv, nv))
 
@@ -77,7 +114,7 @@ def laplacian_from_network(network, weights=None, ind_dirichlet=None):
     return _laplacian((row, col), weights, ind_dirichlet)
 
 
-def laplacian_from_igraph(graph, weights=None, ind_dirichlet=None):
+def laplacian_from_igraph(graph, weights=None, ind_dirichlet=None, val_dirichlet=1.0):
     """
     Parameters
     ----------
@@ -98,7 +135,7 @@ def laplacian_from_igraph(graph, weights=None, ind_dirichlet=None):
     row = edges[0]
     col = edges[1]
 
-    return _laplacian((row, col), weights, ind_dirichlet)
+    return _laplacian((row, col), weights, ind_dirichlet, val_dirichlet)
 
 
 class LaplacianMatrix(object):

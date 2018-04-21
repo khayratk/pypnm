@@ -170,7 +170,7 @@ class DynamicSaturationComputer(QuasiStaticSaturationComputer):
 
     network: The pore network object.
     mask_accounted_pores: bool ndarray, optional
-        pores with a corresponding value of False in this array will be ignored when computing time-steps.
+        pores with a corresponding value of False in this array will be ignored when computing saturation
     """
     def __init__(self, network, mask_accounted_pores=None):
         self.network = network
@@ -201,13 +201,15 @@ class DynamicSaturationComputer(QuasiStaticSaturationComputer):
     def sat_nw(self):
         network = self.network
         pores = network.pores
-        return np.sum(pores.sat * pores.vol) / np.sum(pores.vol)
+        return np.sum(pores.sat[self.accounted_pores] * pores.vol[self.accounted_pores ]) / np.sum(pores.vol[self.accounted_pores ])
 
     def sat_nw_conn(self):
         Snw_pores = self.sat_nw_conn_pores()
         return Snw_pores
 
     def sat_nw_generic(self, element_array, marker):
-        Sat_nw_loc = element_array.sat[marker == 1]
-        assert (len(marker) == len(element_array.vol))
-        return np.sum(Sat_nw_loc * element_array.vol[marker == 1]) / np.sum(element_array.vol)
+        mask = (marker==1) & self.accounted_pores
+
+        Sat_nw_loc = element_array.sat[mask]
+        assert (len(mask) == len(element_array.vol))
+        return np.sum(Sat_nw_loc * element_array.vol[mask]) / np.sum(element_array.vol[self.accounted_pores])

@@ -3,9 +3,25 @@ import igraph as ig
 import numpy as np
 
 from pypnm.linalg.laplacianmatrix import *
-from pypnm.linalg.laplacianmatrix import laplacian_from_igraph
+from pypnm.linalg.laplacianmatrix import laplacian_from_igraph, flow_matrix_from_graph
 from pypnm.porenetwork.network_factory import cube_network
 
+
+def test_flow_matrix():
+    g = ig.Graph()
+    g.add_vertices(4)
+    g.add_edge(0, 1)
+    g.add_edge(1, 2)
+    g.add_edge(2, 3)
+
+    g.es["cond"] = [1, 1, 1]
+    g.vs["p"] = [10,5,4,1]
+
+    A = flow_matrix_from_graph(g, g.vs["p"], g.es["cond"], ind_dirichlet=[2,3], val_dirichlet=0.0)
+
+    return A
+
+print test_flow_matrix().todense()
 
 def test_laplacianmatrix():
     network = cube_network(N=20)

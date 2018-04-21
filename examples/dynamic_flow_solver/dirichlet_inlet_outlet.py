@@ -10,14 +10,20 @@ from pypnm.flow_simulation.dynamic_simulation import DynamicSimulation
 from pypnm.flow_simulation.simulation_bc import SimulationBoundaryCondition
 from sim_settings import sim_settings
 import logging
+from pypnm.porenetwork.network_manipulation import remove_tubes_between_face_pores
 
 logger = logging.getLogger('pypnm')
 logger.setLevel("WARN")
 
 
+import numpy as np
+
+
 def dynamic_simulation():
     # Generate small unstructured network.
     network = unstructured_network_periodic_y(20000, quasi_2d=True)
+    network = remove_tubes_between_face_pores(network, EAST)
+    network = remove_tubes_between_face_pores(network, WEST)
 
     # The implemented dynamic flow solver can only work with zero volume pore throats
     network.set_zero_volume_all_tubes()
@@ -39,7 +45,7 @@ def dynamic_simulation():
     simulation.set_boundary_conditions(bc)
 
     # Set output-time interval for simulation
-    delta_t_output = 0.1
+    delta_pvi = 0.01
 
     #  Before starting simulation set up the postprocessor
 
@@ -55,8 +61,8 @@ def dynamic_simulation():
     simulation.write_vtk_output("initial_network")
 
     for n in xrange(50):
-        print ("TimeStep: %g" % delta_t_output)
-        simulation.advance_in_time(delta_t=delta_t_output)
+        print ("Advancing simulation with %g pore volumes" % delta_pvi)
+        simulation.advance_in_injected_volume(delta_pvi=delta_pvi)
 
         simulation.write_vtk_output(label=n)
         simulation.write_to_hdf(label=n, folder_name="paraview_dyn_run")
