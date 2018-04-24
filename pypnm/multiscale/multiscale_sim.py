@@ -568,7 +568,7 @@ class MultiscaleSim(object):
     @staticmethod
     def compute_nonwetting_influx(simulations):
         return {i: simulations[i].total_source_nonwett + simulations[i].total_sink_nonwett
-                if len(simulations[i].bc.pi_list_inlet) == 0
+                if len(simulations[i].bc.pi_list_press_inlet) == 0
                 else -simulations[i].total_source_wett - simulations[i].total_sink_wett
                 for i in simulations}
 

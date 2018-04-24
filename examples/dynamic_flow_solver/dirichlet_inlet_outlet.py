@@ -39,7 +39,7 @@ def dynamic_simulation():
     pi_inlet = network.pi_list_face[WEST]
     pi_outlet = network.pi_list_face[EAST]
 
-    bc.set_pressure_inlet(pi_list=pi_inlet, p_wett=12.e5, p_nwett=16.e5)
+    bc.set_pressure_inlet(pi_list=pi_inlet, p_wett=12.e06, p_nwett=13.e06)
     bc.set_pressure_outlet(pi_list=pi_outlet, p_wett=0.0)
 
     simulation.set_boundary_conditions(bc)

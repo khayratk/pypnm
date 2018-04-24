@@ -121,7 +121,7 @@ class SubNetwork(PoreNetwork):
         pore_face = np.zeros(self.nr_p, dtype=np.int32)
         pore_face[:] = DOMAIN
 
-        self.pi_list_face = [None, None, None, None, None, None]
+        self.pi_list_face = dict()
 
         marker_boundary_pores = np.zeros(self.nr_p, dtype=np.int)
         for FACE in FACES:

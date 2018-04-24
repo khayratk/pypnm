@@ -117,7 +117,7 @@ class StructuredPoreNetwork(PoreNetwork):
         pore_face = np.zeros(self.nr_p, dtype=np.int32)
         pore_face[:] = DOMAIN
 
-        self.pi_list_face = [None, None, None, None, None, None]
+        self.pi_list_face = dict()
 
         for FACE, ind in zip([WEST, EAST], [0, self.Nx-1]):
             self.set_array_along_x_plane(pore_face, FACE, i=ind)

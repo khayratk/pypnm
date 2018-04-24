@@ -1,7 +1,5 @@
 import igraph as ig
 
-import numpy as np
-
 from pypnm.linalg.laplacianmatrix import *
 from pypnm.linalg.laplacianmatrix import laplacian_from_igraph, flow_matrix_from_graph
 from pypnm.porenetwork.network_factory import cube_network
@@ -9,19 +7,22 @@ from pypnm.porenetwork.network_factory import cube_network
 
 def test_flow_matrix():
     g = ig.Graph()
-    g.add_vertices(4)
+    g.add_vertices(5)
     g.add_edge(0, 1)
     g.add_edge(1, 2)
     g.add_edge(2, 3)
+    g.add_edge(4, 2)
 
-    g.es["cond"] = [1, 1, 1]
-    g.vs["p"] = [10,5,4,1]
+    g.es["cond"] = [1, 1, 1, 1]
+    g.vs["p"] = [10, 5, 4, 1, 10]
 
-    A = flow_matrix_from_graph(g, g.vs["p"], g.es["cond"], ind_dirichlet=[2,3], val_dirichlet=0.0)
+    A = flow_matrix_from_graph(g, g.vs["p"], g.es["cond"], ind_dirichlet=[3], val_dirichlet=0.0)
 
     return A
 
+
 print test_flow_matrix().todense()
+
 
 def test_laplacianmatrix():
     network = cube_network(N=20)
@@ -45,9 +46,9 @@ def test_laplacian_from_igraph():
     random_weights = np.random.rand(graph.ecount())
     A = laplacian_from_igraph(graph, random_weights)
 
-    sum_cols_of_A = A*np.ones(graph.vcount())
+    sum_cols_of_A = A * np.ones(graph.vcount())
 
-    assert np.allclose(sum_cols_of_A,  0.0, rtol=1e-10)
+    assert np.allclose(sum_cols_of_A, 0.0, rtol=1e-10)
 
     # Test with random number of dirichlet boundaries
     num_of_dirichlet = np.random.randint(0, graph.vcount())
@@ -55,6 +56,6 @@ def test_laplacian_from_igraph():
     random_weights = np.random.rand(graph.ecount())
     A = laplacian_from_igraph(graph, weights=random_weights, ind_dirichlet=ind_dirichlet)
 
-    sum_cols_of_A = A*np.ones(graph.vcount())
+    sum_cols_of_A = A * np.ones(graph.vcount())
 
-    assert np.isclose(np.sum(sum_cols_of_A),  num_of_dirichlet, rtol=1e-10)
+    assert np.isclose(np.sum(sum_cols_of_A), num_of_dirichlet, rtol=1e-10)

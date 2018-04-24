@@ -15,8 +15,10 @@ from sim_settings import sim_settings
 import logging
 
 logger = logging.getLogger('pypnm')
-logger.setLevel("WARN")
+logger.setLevel("INFO")
 
+import pstats
+import cProfile
 
 def multiscale_simulation(restart):
     comm = Epetra.PyComm()
@@ -95,6 +97,15 @@ def multiscale_simulation(restart):
         multiscale_sim.save()
 
 
+def print_profiling_info(filename):
+    p = pstats.Stats(filename)
+    p.sort_stats('cumulative').print_stats(50)
+    p.sort_stats('time').print_stats(50)
+
+
 if __name__ == "__main__":
-    multiscale_simulation(restart=False)
-    print "Exiting simulation"
+    exec_string = 'multiscale_simulation(restart=False)'
+
+    cProfile.run(exec_string, 'restats')
+    print_profiling_info('restats')
+

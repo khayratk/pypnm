@@ -212,6 +212,12 @@ class PoreNetwork(object):
         self._sort_ngh_pores()
         self._create_nr_nghs_array()
         self._init_pore_inout_type(self.inface, self.outface)
+        self.pi_list_face["WEST"] = self.pi_list_face[WEST]
+        self.pi_list_face["EAST"] = self.pi_list_face[EAST]
+        self.pi_list_face["SOUTH"] = self.pi_list_face[SOUTH]
+        self.pi_list_face["NORTH"] = self.pi_list_face[NORTH]
+        self.pi_list_face["BOTTOM"] = self.pi_list_face[BOTTOM]
+        self.pi_list_face["TOP"] = self.pi_list_face[TOP]
 
     def _init_pore_inout_type(self, inface, outface):
         """ Initialize the types of each pore. A pore is either

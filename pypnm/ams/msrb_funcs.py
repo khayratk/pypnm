@@ -120,8 +120,8 @@ def get_supports(A_scipy, v_per_subdomain=1000):
     unique_map, nonunique_map, subgraph_ids_vec = MultiScaleSimUnstructured.create_maps(graph, comm)
 
     epetra_importer = Epetra.Import(nonunique_map, unique_map)
-    epetra_importer.NumPermuteIDs() == 0
-    epetra_importer.NumSameIDs() == unique_map.NumMyElements()
+    assert epetra_importer.NumPermuteIDs() == 0
+    assert epetra_importer.NumSameIDs() == unique_map.NumMyElements()
 
     my_basis_support = dict()
 

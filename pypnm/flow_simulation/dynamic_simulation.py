@@ -769,7 +769,7 @@ class DynamicSimulation(Simulation):
             flux_w_inlet = np.sum(self.q_w[self.bc.pi_list_w_source])
             flux_w_outlet = np.sum(self.q_w[pi_sink_all])
 
-            if len(self.bc.pi_list_press_inlet > 0.0):
+            if len(self.bc.pi_list_press_inlet) > 0.0:
                 flux_nw_inlet = np.sum(self.flux_n[self.bc.pi_list_press_inlet])
 
             self.pvi += flux_nw_inlet*dt/np.sum(network.pores.vol[self.bool_accounted_pores])
