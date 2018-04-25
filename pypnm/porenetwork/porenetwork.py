@@ -82,6 +82,34 @@ class PoreNetwork(object):
         L_z = z_max - z_min
         return L_x, L_y, L_z
 
+    @property
+    def edge_vectors(self):
+        """
+        Returns
+        _______
+        out: ndarray
+            nr_t X 3 array, containing the pore-to-pore direction vector of an edge.
+
+        """
+        pi_1, pi_2 = self.edgelist[:, 0], self.edgelist[:, 1]
+        x, y, z = self.pores.x, self.pores.y, self.pores.z
+        coords = np.vstack([x, y, z]).T
+
+        return coords[pi_2] - coords[pi_1]
+
+    @property
+    def edge_orientations(self):
+        """
+        Returns
+        _______
+        out: ndarray
+            nr_t X 3 array, containing the normalized pore-to-pore direction vector of an edge.
+
+        """
+        edge_vectors = self.edge_vectors
+
+        return edge_vectors/ np.linalg.norm(edge_vectors, axis = 1)
+
     def distribute_throat_volume_to_neighboring_pores(self):
         """
         Distributes volume in throats equally among the neighboring pores (proportional according to pore volumes).
