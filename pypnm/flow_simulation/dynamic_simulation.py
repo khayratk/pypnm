@@ -160,7 +160,7 @@ class DynamicSimulation(Simulation):
 
             self.pi_nghs_of_w_sinks_interior[pi] = ngh_pores_interior
 
-    def advance_in_sat(self, delta_s, callback=None):
+    def advance_in_sat(self, delta_s, callbacks=[]):
         """
         Advances the simulation by a specified saturation.
 
@@ -169,8 +169,8 @@ class DynamicSimulation(Simulation):
         delta_s: float
             sat difference between initial state and final state of the simulation.
 
-        callback: function
-            User-specified function to be called at the end of every timestep. Useful for custom-processing
+        callbacks: list
+            list of user-specified functions to be called at the end of every timestep. Useful for custom-processing
 
         Notes
         ------
@@ -186,9 +186,9 @@ class DynamicSimulation(Simulation):
 
         self.save_status()
 
-        return self.__advance(stop_criterion, callback)
+        return self.__advance(stop_criterion, callbacks)
 
-    def advance_in_time(self, delta_t, callback=None):
+    def advance_in_time(self, delta_t, callbacks=[]):
         """
         Advances the simulation to a specified time
 
@@ -197,8 +197,8 @@ class DynamicSimulation(Simulation):
         delta_t: float
             Time difference between initial state and final state of the simulation.
 
-        callback: function
-            User-specified function to be called at the end of every timestep. Useful for custom-processing
+        callbacks: list
+            list of user-specified functions to be called at the end of every timestep. Useful for custom-processing
 
         Notes
         ------
@@ -214,9 +214,9 @@ class DynamicSimulation(Simulation):
 
         self.save_status()
 
-        return self.__advance(stop_criterion, callback)
+        return self.__advance(stop_criterion, callbacks)
 
-    def advance_in_injected_volume(self, delta_pvi, callback=None):
+    def advance_in_injected_volume(self, delta_pvi, callbacks=None):
         """
         Advances the simulation by specified injected pore volumes of nonwetting phase.
 
@@ -225,8 +225,9 @@ class DynamicSimulation(Simulation):
         delta_pvi: float
             Time difference between initial state and final state of the simulation.
 
-        callback: function
-            User-specified function to be called at the end of every timestep. Useful for custom-processing
+        callbacks: list
+            list of user-specified functions to be called at the end of every timestep. Useful for custom-processing
+
 
         Notes
         ------
@@ -242,7 +243,7 @@ class DynamicSimulation(Simulation):
 
         self.save_status()
 
-        return self.__advance(stop_criterion, callback)
+        return self.__advance(stop_criterion, callbacks)
 
     def __set_source_arrays(self, bc):
         """
@@ -688,7 +689,7 @@ class DynamicSimulation(Simulation):
             self.network.pores.p_c[pi_out] = JNModel.sat_to_pc_func(sat=1.e-7, gamma=gamma,
                                                                     r=self.network.pores.r[pi_out])
 
-    def __advance(self, stop_criterion, callback):
+    def __advance(self, stop_criterion, callbacks):
         network = self.network
 
         network.pores.p_w[:] = 0.0
@@ -814,8 +815,9 @@ class DynamicSimulation(Simulation):
                     logger.warning("Initial nonwetting sink was  %e", self.q_n_tot_sink)
                     break
 
-            if callback is not None:
-                callback(self)
+            if callbacks is not None:
+                for callback in callbacks:
+                    callback(self)
 
             counter += 1
 
