@@ -8,8 +8,10 @@ from pypnm.linalg.linear_system_solver import _ref_residual_inf, logger
 from pypnm.linalg.petsc_interface import get_petsc_ksp
 from pypnm.linalg.trilinos_interface import matrix_scipy_to_epetra, vector_numpy_to_epetra, trilinos_ml_prec, \
     trilinos_solve, solve_aztec
-from scikits.umfpack import splu
-
+try:
+    from scikits.umfpack import splu
+except ImportError:
+    pass
 
 class PressureSolverDynamicDirichlet(object):
     def __init__(self, network):
