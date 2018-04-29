@@ -108,7 +108,7 @@ class PoreNetwork(object):
         """
         edge_vectors = self.edge_vectors
 
-        return edge_vectors/ np.linalg.norm(edge_vectors, axis = 1)
+        return (edge_vectors.T/ np.linalg.norm(edge_vectors, axis =1)).T
 
     def distribute_throat_volume_to_neighboring_pores(self):
         """
