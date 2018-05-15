@@ -7,6 +7,68 @@ from pypnm.linalg.laplacianmatrix import laplacian_from_network
 from pypnm.linalg.petsc_interface import petsc_solve
 from pypnm.percolation import graph_algs
 from pypnm.porenetwork.constants import *
+from pypnm.porenetwork.component import tube_list_x_plane, tube_list_y_plane, tube_list_z_plane
+
+
+def average_flux(network, press, cond, dir=0):
+    assert dir in [0, 1, 2]
+
+    l_x, l_y, l_z = network.dim
+
+    if dir == 0:
+        ti_center = tube_list_x_plane(network, np.min(network.pores.x) + l_x / 2)
+
+    if dir == 1:
+        ti_center = tube_list_y_plane(network, np.min(network.pores.y) + l_y / 2)
+
+    if dir == 2:
+        ti_center = tube_list_z_plane(network, np.min(network.pores.z) + l_z / 2)
+
+    tubes = network.tubes
+    orientation = network.edge_orientations.T[dir]
+    pi_1, pi_2 = network.edgelist[:, 0], network.edgelist[:, 1]
+    flux_12 = -(press[pi_2] - press[pi_1]) * cond
+    dvdu = flux_12 * orientation * tubes.l_tot
+    integral = np.sum(dvdu) / np.sum(tubes.A_tot * np.abs(orientation) * tubes.l_tot) * np.sum(tubes.A_tot[ti_center])
+    return integral
+
+
+def work_done_per_second(network, press, cond):
+    pi_1, pi_2 = network.edgelist[:, 0], network.edgelist[:, 1]
+    energy_dissipated = np.sum((press[pi_2] - press[pi_1])**2*cond)
+    total_energy_dissipated = np.sum(energy_dissipated)
+    return total_energy_dissipated
+
+
+def press_drop_from_energy(network, press, cond, total_flux):
+    total_energy_dissipated = work_done_per_second(network, press, cond)
+    pressure_drop = total_energy_dissipated /(total_flux)
+    return pressure_drop
+
+
+def flux_by_pressure_drop_three_directions(network, fluid_properties):
+
+    cond_computer = ConductanceCalc(network, fluid_properties)
+    tube_k_w = cond_computer.conductances_fully_wetting()
+
+    def _general_q_by_p(pi_inlet, pi_outlet, dir):
+        pi_dirichlet = np.union1d(pi_inlet, pi_outlet)
+        A = laplacian_from_network(network, weights=tube_k_w, ind_dirichlet=pi_dirichlet)
+        rhs = np.zeros(network.nr_p)
+        rhs[pi_inlet] = 100.0
+
+        pressure = petsc_solve(A * 1e20, rhs * 1e20, tol=1e-12)
+        total_flux_one_phase = average_flux(network, pressure, tube_k_w, dir=dir)
+        press_drop = press_drop_from_energy(network, pressure, tube_k_w, total_flux_one_phase)
+        return total_flux_one_phase/press_drop
+
+    q_by_p = np.zeros(3)
+
+    q_by_p[0] = _general_q_by_p(network.pi_list_face[WEST], network.pi_list_face[EAST], 0)
+    q_by_p[1] = _general_q_by_p(network.pi_list_face[SOUTH], network.pi_list_face[NORTH], 1)
+    q_by_p[2] = _general_q_by_p(network.pi_list_face[BOTTOM], network.pi_list_face[TOP], 2)
+
+    return q_by_p
 
 
 class SimpleRelPermComputer(object):
@@ -110,3 +172,7 @@ class SimpleRelPermComputer(object):
         assert np.all(K > 0.0), K
 
         return K
+
+        flux_inlet = intrinsic_average_flux_x(network, press, network.tubes.k_w)
+        pressure_drop = press_drop_from_energy(network, press, network.tubes.k_w, flux_inlet)
+        effective_permeability = flux_inlet * l_x / (l_y * l_z * pressure_drop)

@@ -43,7 +43,7 @@ def structured_network_27(Nx, Ny, Nz, media_type="consolidated", periodic=False)
     return network
 
 
-def unstructured_network(nr_pores, domain_size=None, is_2d=False):
+def unstructured_network(nr_pores, domain_size=None, quasi_2d=False):
     r_min, r_max = 20e-6, 75e-6
     pdf_pore_radius = beta(1.25, 1.5, loc=r_min, scale=(r_max - r_min))
 
@@ -53,10 +53,10 @@ def unstructured_network(nr_pores, domain_size=None, is_2d=False):
     pdf_coord_number = randint(low=4, high=12)
 
     if domain_size is None:
-        if is_2d:
+        if quasi_2d:
             r_max = 75e-6
-            domain_length = (np.pi * r_max ** 2 * nr_pores) ** (1. / 2.)
-            domain_size = [2 * domain_length, domain_length, 0.0]
+            domain_length = (4. / 3. * np.pi * r_max ** 3 * nr_pores) ** (1. / 3.)
+            domain_size = [2.5 * domain_length, 2.5*domain_length, domain_length/8.]
         else:
             r_max = 75e-6
             domain_length = (4. / 3. * np.pi * r_max ** 3 * nr_pores) ** (1. / 3.)
@@ -65,7 +65,7 @@ def unstructured_network(nr_pores, domain_size=None, is_2d=False):
     network = create_unstructured_network(nr_pores, pdf_pore_radius=pdf_pore_radius,
                                           pdf_tube_radius=pdf_tube_radius,
                                           pdf_coord_number=pdf_coord_number,
-                                          domain_size=domain_size, is_2d=is_2d)
+                                          domain_size=domain_size, is_2d=False)
     network = reorder_network(network)  # Important for efficiency
     return network
 
@@ -81,7 +81,7 @@ def unstructured_network_delaunay(nr_pores, domain_size=None, quasi_2d=False, bo
         if quasi_2d:
             r_max = 75e-6
             domain_length = (4. / 3. * np.pi * r_max ** 3 * nr_pores) ** (1. / 3.)
-            domain_size = [4 * domain_length, 2*domain_length, domain_length/8.]
+            domain_size = [2.5 * domain_length, 2.5*domain_length, domain_length/8.]
         else:
             r_max = 75e-6
             domain_length = (4. / 3. * np.pi * r_max ** 3 * nr_pores) ** (1. / 3.)
