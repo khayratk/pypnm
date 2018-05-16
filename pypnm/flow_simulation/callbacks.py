@@ -18,7 +18,10 @@ def time_avg_energy_dissip(phase):
 
         _callback.total_time += simulation.dt
         _callback.work += energy_dissipated * simulation.dt
-        _callback.energy_dissip = _callback.work/_callback.total_time
+        if  _callback.total_time==0.0:
+            _callback.energy_dissip = 0.0
+        else:
+            _callback.energy_dissip = _callback.work/_callback.total_time
 
     _callback.phase = phase
     _callback.energy_dissip = 0.0
@@ -39,7 +42,10 @@ def time_avg_inlet_flux(phase, face):
         pi_inlet = network.pi_list_face[face]
         _callback.sum_flux += np.sum(flux[pi_inlet]) * simulation.dt
         _callback.total_time += simulation.dt
-        _callback.avg_flux = _callback.sum_flux / _callback.total_time
+        if  _callback.total_time==0.0:
+            _callback.avg_flux = 0.0
+        else:
+            _callback.avg_flux = _callback.sum_flux / _callback.total_time
 
     _callback.sum_flux = 0.0
     _callback.total_time = 0.0
@@ -73,7 +79,11 @@ def time_avg_flux(phase):
 
         _callback.total_time += simulation.dt
         _callback.avg_flux_dt_integral += avg_flux * simulation.dt
-        _callback.avg_flux_time_avg = _callback.avg_flux_dt_integral / _callback.total_time
+
+        if _callback.total_time == 0.0:
+            _callback.avg_flux_time_avg = 0.0
+        else:
+            _callback.avg_flux_time_avg = _callback.avg_flux_dt_integral / _callback.total_time
 
     _callback.phase = phase
     _callback.total_time = 0.0

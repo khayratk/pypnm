@@ -130,13 +130,14 @@ class PressureSolverDynamicDirichlet(object):
             pores.p_n[:] = pores.p_w + pores.p_c
 
         count = 0
-        while (mass_residual > 1e-5) and (count < 100):
+        while (mass_residual > 1e-5) and (count < 20):
             count += 1
             inner_loop_solve(tol)
             mass_residual = self.compute_mass_residual(A, self.rhs, self.sol)
             logger.debug("Mass flux residual %e", mass_residual)
             if count == 99:
                 logger.warn("Failed to converge. Residual %e. Falling back to mltrilinos solver", mass_residual)
+                logger.warn("Solver which failed was %s", solver)
                 return self.solve(solver="mltrilinos") # Fall back to reliable solver
 
             tol /= 10.0

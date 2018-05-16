@@ -85,7 +85,7 @@ def unstructured_network_delaunay(nr_pores, domain_size=None, quasi_2d=False, bo
         else:
             r_max = 75e-6
             domain_length = (4. / 3. * np.pi * r_max ** 3 * nr_pores) ** (1. / 3.)
-            domain_size = [2 * domain_length, domain_length, domain_length]
+            domain_size = [domain_length, domain_length, domain_length]
 
     if body_throat_corr_param is not None:
         network = create_delaunay_network(nr_pores, pdf_pore_radius=pdf_pore_radius,
