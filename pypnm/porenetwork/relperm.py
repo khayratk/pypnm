@@ -46,16 +46,16 @@ def press_drop_from_energy(network, press, cond, total_flux):
     return pressure_drop
 
 
-def flux_by_pressure_drop_three_directions(network, fluid_properties):
+def flux_by_pressure_drop_three_directions(network, fluid_properties, q_tot):
 
     cond_computer = ConductanceCalc(network, fluid_properties)
     tube_k_w = cond_computer.conductances_fully_wetting()
 
     def _general_q_by_p(pi_inlet, pi_outlet, dir):
-        pi_dirichlet = np.union1d(pi_inlet, pi_outlet)
+        pi_dirichlet = pi_outlet
         A = laplacian_from_network(network, weights=tube_k_w, ind_dirichlet=pi_dirichlet)
         rhs = np.zeros(network.nr_p)
-        rhs[pi_inlet] = 100.0
+        rhs[pi_inlet] = q_tot/len(pi_inlet)
 
         pressure = petsc_solve(A * 1e20, rhs * 1e20, tol=1e-12)
         total_flux_one_phase = average_flux(network, pressure, tube_k_w, dir=dir)

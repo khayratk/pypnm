@@ -1,5 +1,5 @@
 import numpy as np
-from pypnm.porenetwork.component import tube_list_x_plane
+from pypnm.porenetwork.component import tube_list_x_plane, tube_list_ngh_to_pore_list
 
 
 def time_avg_energy_dissip(phase):
@@ -14,7 +14,9 @@ def time_avg_energy_dissip(phase):
             cond = network.tubes.k_w
 
         pi_1, pi_2 = network.edgelist[:, 0], network.edgelist[:, 1]
-        energy_dissipated = np.sum((press[pi_2] - press[pi_1]) ** 2 * cond)
+
+        energy_dissipated_tubes = (press[pi_2] - press[pi_1]) ** 2 * cond
+        energy_dissipated = np.sum(energy_dissipated_tubes)
 
         _callback.total_time += simulation.dt
         _callback.work += energy_dissipated * simulation.dt
@@ -27,31 +29,6 @@ def time_avg_energy_dissip(phase):
     _callback.energy_dissip = 0.0
     _callback.total_time = 0.0
     _callback.work = 0.0
-    return _callback
-
-
-def time_avg_inlet_flux(phase, face):
-    def _callback(simulation):
-        network = simulation.network
-
-        if _callback.phase == "NWETT":
-            flux = simulation.flux_n
-        elif _callback.phase == "WETT":
-            flux = simulation.flux_w
-
-        pi_inlet = network.pi_list_face[face]
-        _callback.sum_flux += np.sum(flux[pi_inlet]) * simulation.dt
-        _callback.total_time += simulation.dt
-        if  _callback.total_time==0.0:
-            _callback.avg_flux = 0.0
-        else:
-            _callback.avg_flux = _callback.sum_flux / _callback.total_time
-
-    _callback.sum_flux = 0.0
-    _callback.total_time = 0.0
-    _callback.avg_flux = 0.0
-    _callback.phase = phase
-
     return _callback
 
 
