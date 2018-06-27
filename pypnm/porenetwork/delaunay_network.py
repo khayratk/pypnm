@@ -17,6 +17,7 @@ def create_delaunay_network_from_sphere_packing(x_coord, y_coord, z_coord, rad, 
     network.add_pores(x_coord, y_coord, z_coord, rad)
 
     points = zip(x_coord, y_coord, z_coord)
+
     tri = Delaunay(points)
 
     indices, indptr = tri.vertex_neighbor_vertices
@@ -87,4 +88,5 @@ def create_delaunay_network(nr_pores, pdf_pore_radius, domain_size, is_2d=False,
     x_coord, y_coord, z_coord, rad = sphere_packing(rad=rad_generated, domain_size=domain_size, is_2d=is_2d)
 
     network = create_delaunay_network_from_sphere_packing(x_coord, y_coord, z_coord, rad, pdf_tube_radius, body_throat_corr_param)
+
     return network

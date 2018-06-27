@@ -20,9 +20,9 @@ def test_save_and_load_network():
     pc_comp.compute()
     assert sat_comp.sat_nw_conn() > 0.4
 
-    network.save("my_network.pkl")
+    network.save("my_network")
 
-    network_2 = network.load("my_network.pkl")
+    network_2 = network.load("my_network")
     sat_comp_2 = QuasiStaticSaturationComputer(network_2)
     pe_comp_2 = EntryPressureComputer()
     pc_comp_2 = CapillaryPressureComputer(network_2)

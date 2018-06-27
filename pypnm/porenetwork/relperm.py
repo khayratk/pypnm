@@ -171,7 +171,7 @@ class SimpleRelPermComputer(object):
 
         assert np.all(K > 0.0), K
 
-        return K
+        return np.asarray(K)
 
         flux_inlet = intrinsic_average_flux_x(network, press, network.tubes.k_w)
         pressure_drop = press_drop_from_energy(network, press, network.tubes.k_w, flux_inlet)

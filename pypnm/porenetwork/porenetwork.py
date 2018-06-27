@@ -571,8 +571,8 @@ class PoreNetwork(object):
         """
         import os
         directory = os.path.dirname(filename)
-
-
+        if filename.endswith(".pkl"):
+            filename = filename[:-4]
         try:
             if not directory == '':
                 os.makedirs(directory)
@@ -580,7 +580,7 @@ class PoreNetwork(object):
             if not os.path.isdir(directory):
                 raise
 
-        output_file = open(filename, 'wb')
+        output_file = open(filename + ".pkl", 'wb')
         pickle.dump(self, output_file, protocol=pickle.HIGHEST_PROTOCOL)
         output_file.close()
 
@@ -594,7 +594,10 @@ class PoreNetwork(object):
         filename: str
 
         """
-        input_file = open(filename, 'rb')
+        if filename.endswith(".pkl"):
+            filename = filename[:-4]
+
+        input_file = open(filename + ".pkl", 'rb')
         network = pickle.load(input_file)
         return network
 

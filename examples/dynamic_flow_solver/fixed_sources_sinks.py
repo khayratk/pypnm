@@ -29,7 +29,7 @@ def dynamic_simulation():
         network.set_zero_volume_all_tubes()
 
     except:
-        network = unstructured_network_delaunay(4000, quasi_2d=True)
+        network = unstructured_network_delaunay(10000, quasi_2d=True)
         #network = remove_tubes_between_face_pores(network, EAST)
         #network = remove_tubes_between_face_pores(network, WEST)
         pi_inlet = np.union1d(network.pi_list_face[WEST], network.pi_list_face[EAST])
@@ -45,7 +45,7 @@ def dynamic_simulation():
         network.save("network.pkl")
 
     # Initialize solver
-    simulation = DynamicSimulation(network, sim_settings["fluid_properties"], explicit=True, delta_pc=0.02)
+    simulation = DynamicSimulation(network, sim_settings["fluid_properties"], delta_pc=0.02)
     simulation.press_solver_type = "petsc"
 
     # Set boundary conditions using list of pores and list of sources. Here a total inflow of q_total is used

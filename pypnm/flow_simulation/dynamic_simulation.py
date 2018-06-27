@@ -34,9 +34,6 @@ class DynamicSimulation(Simulation):
     fluid_properties: dict
         Dictionary of fluid properties, containing the keys "mu_n", "mu_w" and "gamma".
 
-    explicit: bool (optional)
-        If True, the saturation in each pore is updated explicitly. Else an implicit algorithm is used
-
     delta_pc: float (optional)
         Percentage that the capillary pressure is allowed to change within a pore body per timestep.
 
@@ -48,7 +45,7 @@ class DynamicSimulation(Simulation):
     Running a dynamic simulation modifies the network pore and throat attribute such as p_n, p_w
 
     """
-    def __init__(self, network, fluid_properties, explicit=True, delta_pc=0.01, ptol=1e-6):
+    def __init__(self, network, fluid_properties, delta_pc=0.01, ptol=1e-6):
         super(DynamicSimulation, self).__init__(network, fluid_properties)
 
         if np.any(network.pores.vol <= 0.0):
@@ -58,7 +55,6 @@ class DynamicSimulation(Simulation):
             raise ValueError("Network throats have to all have zero volume for dynamic flow solver")
 
         self.fluid_properties = fluid_properties
-        self.explicit = explicit
         self.delta_pc = delta_pc
         self.ptol = ptol
 
@@ -302,108 +298,6 @@ class DynamicSimulation(Simulation):
         logger.debug("Computing nonwetting and wetting fluxes")
         self.flux_n[:] = press_solver.compute_nonwetting_flux()
         self.flux_w[:] = press_solver.compute_wetting_flux()
-
-    def __update_saturation_implicit(self, dt):
-        eps_sat = 1.e-4
-        logger.debug("Solving fully implicit")
-        network = self.network
-        print "solving fully implicit"
-
-        def residual_saturation(p_w, p_c, sat, dt):
-            p_n = p_w + p_c
-            residual = (sat - network.pores.sat) + (A_n * p_n - self.q_n) * dt / network.pores.vol
-            return residual
-
-        def residual_pressure(p_w, p_c):
-            rhs = -A_n * p_c + self.q_n + self.q_w
-            rhs[pi_dirichlet] = 0.0
-            ref_residual = norm(A * (rhs / A.diagonal()) - rhs, ord=np.inf)
-            residual_normalized = (A*p_w - rhs)/ref_residual
-            return residual_normalized
-
-        pi_dirichlet = ((self.q_n + self.q_w) == 0.0).nonzero()[0][0]
-
-        # Assume that the conductances do not change and are fixed
-        A = laplacian_from_network(network, weights=network.tubes.k_n + network.tubes.k_w, ind_dirichlet=pi_dirichlet)
-        A_n = laplacian_from_network(network, weights=network.tubes.k_n)
-
-        p_w = np.copy(network.pores.p_w)
-        sat = np.copy(network.pores.sat)
-
-        ksp = get_petsc_ksp(A=A * 1e20, ksptype="minres", max_it=10000, tol=1e-9)
-
-        logger.debug("Starting iteration")
-
-        p_c = DynamicCapillaryPressureComputer.sat_to_pc_func(network.pores.sat, network.pores.r)
-
-        while True:
-            for iter in xrange(200):
-                # Solve for pressure
-
-                rhs = -A_n * p_c + self.q_n + self.q_w
-                rhs[pi_dirichlet] = 0.0
-
-                p_w[:] = petsc_solve_from_ksp(ksp, rhs*1e20, x=p_w, tol=1e-9)
-
-                p_n = p_w + p_c
-                # Solve for saturation
-                if iter == 0:
-                    damping = 1.
-                if iter > 0:
-                    damping = 0.4
-                if iter > 10:
-                    damping = 0.1
-                if iter > 20:
-                    damping = 0.055
-                sat = (1-damping)*sat + damping * (network.pores.sat + (self.q_n - A_n * p_n) * dt / network.pores.vol)
-                if np.min(sat) < 0.0:
-                    print "saturation undershoot decreasing time-step slightly"
-                    dt *= 0.5
-
-                if np.max(sat) > 1.0:
-                    print "saturation overshoot"
-
-                sat = np.maximum(sat, 0.0)
-                sat = np.minimum(sat, 0.99999999999)
-
-                p_c = DynamicCapillaryPressureComputer.sat_to_pc_func(sat, network.pores.r)
-                res_pw = residual_pressure(p_w, p_c)
-                res_sat = residual_saturation(p_w, p_c, sat, dt)
-
-                linf_res_pw = norm(res_pw, ord=np.inf)
-                linf_res_sat = norm(res_sat, ord=np.inf)
-
-                if iter % 10 == 0:
-                    print "iteration %d \t sat res: %g \t press res %g"%(iter, linf_res_sat, linf_res_pw)
-
-                if iter > 3 and linf_res_sat > 1000:
-                    break
-
-                if iter > 10 and linf_res_sat > 1.0:
-                    break
-
-                if linf_res_sat < eps_sat and linf_res_pw < 1e-5:
-                    break
-
-            if linf_res_sat < eps_sat and linf_res_pw < 1e-5:
-                print "Iteration converged"
-                print "iteration %d \t sat res: %g \t press res %g" % (iter, linf_res_sat, linf_res_pw)
-                network.pores.sat[:] = sat
-                network.pores.p_w[:] = p_w
-                network.pores.p_n[:] = p_n
-                network.pores.p_c[:] = p_c
-                assert np.all(sat <= 1.0)
-                print "Leaving implicit loop"
-                break
-            else:
-                p_w = np.copy(network.pores.p_w)
-                sat = np.copy(network.pores.sat)
-                p_c = DynamicCapillaryPressureComputer.sat_to_pc_func(sat, network.pores.r)
-                dt *= 0.5
-                print "decreasing timestep to", dt
-
-        print "timestep is", dt
-        return dt
 
     def __check_mass_conservation(self):
         if self.bc.no_dirichlet:
@@ -752,10 +646,7 @@ class DynamicSimulation(Simulation):
             dt_ratio = dt_details["pc_crit_drain"]/dt_details["sat_n_double"]
 
             logger.debug("Updating saturation")
-            if self.explicit:
-                self.sat_comp.update_saturation(flux_n=self.flux_n, dt=dt, source_nonwett=self.q_n)
-            else:
-                dt = self.__update_saturation_implicit(dt=dt)
+            self.sat_comp.update_saturation(flux_n=self.flux_n, dt=dt, source_nonwett=self.q_n)
 
             _plist = self.bc.pi_list_press_inlet
             if len(_plist) > 0:

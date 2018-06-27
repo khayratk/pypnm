@@ -146,7 +146,7 @@ class MSRSB(object):
 
             # Drop entries of delta_P_temp not matching the structure of delta_P
             self.delta_P.PutScalar(0.0)
-            ierr += EpetraExt.Add(delta_P_temp, False, 1.0, self.delta_P, 1.0)  # delta_P = N*(D^-1 AP)
+            ierr += EpetraExt.Add(delta_P_temp, False, 1.0, self.delta_P, 1.0)  # delta_P = N*(D^-1A P)
 
             sum_cols_delta_P = sum_of_columns(self.delta_P)
 
@@ -154,7 +154,7 @@ class MSRSB(object):
 
             tau[:] = sum_cols_delta_P[:] / self.num_overlaps[:]
             support_matrix_copy.PutScalar(1.0)
-            support_matrix_copy.LeftScale(tau)   # last term in Equation (19)
+            support_matrix_copy.LeftScale(tau)   # last term in Equation (19) of Mandel et al. 1999
 
             ierr += EpetraExt.Add(support_matrix_copy, False, -1.0, self.delta_P, 1.0)  # delta_P = Z(N*D^-1AP)
 
@@ -176,13 +176,13 @@ class MSRSB(object):
         assert np.allclose(sum_cols_P[:], 1.0, atol=1.e-1000, rtol=1e-12)
 
         # Important numerical  step to ensure that mass is exactly conserved to machine zero
-        """
+
         tau[:] = 1./sum_cols_P[:]
         self.P.LeftScale(tau)
         sum_cols_P = sum_of_columns(self.P)
 
         assert np.allclose(sum_cols_P[:], 1.0, atol=1.e-1000, rtol=1.e-15)
-        """
+
         assert ierr == 0
 
     def __solve_one_step(self, rhs, RAP, R):
@@ -225,7 +225,7 @@ class MSRSB(object):
         history["n_smooth"] = []
         history["residual"] = []
 
-        assert smoother in ["gmres", "ilu", "jacobi"]
+        assert smoother in ["gmres", "ilu"]
 
         rhs_sum = rhs.Comm().SumAll(np.sum(rhs[:]))
         if not abs(rhs_sum) < abs(rhs.NormInf() * 1e-8):
@@ -243,7 +243,7 @@ class MSRSB(object):
         ref_pressure[:] = rhs[:] / A_diagonal[:]
         A.Multiply(False, ref_pressure, temp)
         ref_residual[:] = rhs[:] - temp[:]
-        ref_residual_norm = ref_residual.NormInf()
+        ref_residual_norm = ref_residual.NormInf()[0]
 
         AP = mat_multiply(A, self.P)
 
@@ -253,14 +253,10 @@ class MSRSB(object):
         residual = self.__compute_residual(A, rhs, x0, residual)
 
         error = Epetra.Vector(self.P.RangeMap())
+
         if with_multiscale:
             error = self.__solve_one_step(residual, RAP_msfv, self.R)
             x0[:] += error[:]
-
-        if smoother == "ilu":
-            ilu = IFPACK.ILU(self.A)
-            ilu.Initialize()
-            ilu.Compute()
 
         residual_prev_norm = 1.e50
 
@@ -275,9 +271,6 @@ class MSRSB(object):
             solver.SetAztecOption(AztecOO.AZ_precond, AztecOO.AZ_dom_decomp)
             solver.SetAztecOption(AztecOO.AZ_subdomain_solve, AztecOO.AZ_ilu)
 
-        if smoother == "jacobi":
-            solver.SetAztecOption(AztecOO.AZ_solver, AztecOO.AZ_fixed_pt)
-            solver.SetAztecOption(AztecOO.AZ_precond, AztecOO.AZ_Jacobi)
 
         solver.SetAztecOption(AztecOO.AZ_conv, AztecOO.AZ_rhs)
         solver.SetAztecOption(AztecOO.AZ_output, 0)
@@ -301,7 +294,7 @@ class MSRSB(object):
                 logger.debug("Number of iterations for convergence: %d", iteration)
                 break
 
-            if residual.NormInf()[0] >= 1.01 * residual_prev_norm and adapt_smoothing:
+            if (residual.NormInf()[0] >= 1.01 * residual_prev_norm) and adapt_smoothing:
                 n_smooth = int(1.4 * n_smooth)
                 logger.warn("Solver stagnated, increasing number of smoothing steps to %d", n_smooth)
 
@@ -341,7 +334,7 @@ class MSRSB(object):
         max_rhs = rhs_coarse.NormInf()
         error[:] = lhs_coarse[:]-rhs_coarse[:]
         max_err = error.NormInf()
-        tol = max(max_lhs, max_rhs)*1.e-4
+        tol = max(max_lhs, max_rhs)
         assert np.allclose(rhs_coarse[:], lhs_coarse[:], atol=tol), "max_lhs:%e max_rhs:%e, max_error:%e " % (max_lhs, max_rhs, max_err)
 
         if conv_history:

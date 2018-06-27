@@ -16,5 +16,6 @@ def test_spatial_average():
     avg_data, avg_pos = spatial_average.moving_window_average_1d(x, field, window_size, num_points, weights=field)
     assert len(avg_data) == num_points
 
+
 if __name__ == "__main__":
     test_spatial_average()

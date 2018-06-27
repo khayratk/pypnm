@@ -30,8 +30,9 @@ def test_symmetric_dirichlet_bc():
     Test setting dirichlet boundary condition in a manner which leaves the matrix symmetric
     """
     network = cube_network(N=40)
+    fluid_properties = {"mu_n": 1e-8, "mu_w": 1000, "gamma": 1e-3}
 
-    k_computer = ConductanceCalc(network)
+    k_computer = ConductanceCalc(network,fluid_properties)
     k_computer.compute()
 
     p_dirichlet = np.array([1., 23., 43.])
@@ -59,8 +60,9 @@ def test_general_dirichlet_bc():
     Test setting arbitrary dirichlet boundary condition
     """
     network = cube_network(N=10)
+    fluid_properties = {"mu_n": 1e-8, "mu_w": 1000, "gamma": 1e-3}
 
-    k_computer = ConductanceCalc(network)
+    k_computer = ConductanceCalc(network, fluid_properties)
     k_computer.compute()
 
     press_in = 121.1
