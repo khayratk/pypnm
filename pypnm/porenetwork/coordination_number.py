@@ -49,7 +49,7 @@ def choose_edges_for_target_coord_num(network, n_coord):
     # Initialize priority queue
 
     pq = maxpq()
-    for ti in xrange(network.nr_t):
+    for ti in np.random.permutation(xrange(network.nr_t)):
         pq[ti] = priority_tube(ti)
 
     while pq:
