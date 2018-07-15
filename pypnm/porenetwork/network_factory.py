@@ -49,7 +49,7 @@ def structured_network_uniform_coord_number(Nx, Ny, Nz, ngh_min=8, ngh_max=12,
                                             media_type="consolidated", periodic=False):
     network = structured_network_27(Nx, Ny, Nz, media_type=media_type, periodic=periodic)
 
-    target_coord_number = np.minimum(network.nr_nghs-1, np.random.randint(ngh_min, ngh_max+1))
+    target_coord_number = np.minimum(network.nr_nghs, np.random.randint(ngh_min, ngh_max+1))
 
     ti_list = choose_edges_for_target_coord_num(network, target_coord_number)
     ti_list_remove = component.complement_tube_set(network, ti_list)

@@ -30,7 +30,7 @@ def choose_edges_for_target_coord_num(network, n_coord):
     tube_marker = np.ones(network.nr_t, dtype=np.int)*GRAY
     n_avail = network.nr_nghs
     n_white = np.zeros(network.nr_p, dtype=np.int)
-    assert np.all(n_coord < network.nr_nghs)
+    assert np.all(n_coord <= network.nr_nghs)
 
     def priority_tube(ti):
         pi_1, pi_2 = network.edgelist[ti, :]
