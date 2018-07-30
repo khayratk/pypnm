@@ -27,7 +27,7 @@ def average_flux(network, press, cond, dir=0, ti_indices=Ellipsis):
     tubes = network.tubes
 
     A_tot = np.zeros_like(tubes.A_tot)
-    A_tot[ti_indices] = tubes.A_tot[:]
+    A_tot[ti_indices] = tubes.A_tot[ti_indices]
 
     orientation = network.edge_orientations.T[dir]
     pi_1, pi_2 = network.edgelist[:, 0], network.edgelist[:, 1]
