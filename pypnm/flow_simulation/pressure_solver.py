@@ -3,7 +3,7 @@ import numpy as np
 from mpi4py import MPI
 from numpy.linalg import norm
 from petsc4py import PETSc
-from pypnm.linalg.laplacianmatrix import LaplacianMatrix
+from pypnm.linalg.laplacianmatrix import LaplacianMatrix, laplacian_from_network
 from pypnm.linalg.linear_system_solver import _ref_residual_inf, logger
 from pypnm.linalg.petsc_interface import get_petsc_ksp
 from pypnm.linalg.trilinos_interface import matrix_scipy_to_epetra, vector_numpy_to_epetra, trilinos_ml_prec, \
@@ -45,9 +45,9 @@ class PressureSolverDynamicDirichlet(object):
         return flux_w
 
     @staticmethod
-    def compute_mass_residual(A, rhs, sol):
+    def compute_mass_residual(A, rhs, sol, ref_residual):
         residual = rhs - A * sol
-        return norm(residual, ord=np.inf) / _ref_residual_inf(A, rhs)
+        return norm(residual, ord=np.inf) / ref_residual
 
     def add_source_rhs(self, source):
         assert len(source) == self.network.nr_p
@@ -130,10 +130,11 @@ class PressureSolverDynamicDirichlet(object):
             pores.p_n[:] = pores.p_w + pores.p_c
 
         count = 0
+        ref_residual = _ref_residual_inf(A, self.rhs)
         while (mass_residual > 1e-5) and (count < 20):
             count += 1
             inner_loop_solve(tol)
-            mass_residual = self.compute_mass_residual(A, self.rhs, self.sol)
+            mass_residual = self.compute_mass_residual(A, self.rhs, self.sol, ref_residual)
             logger.debug("Mass flux residual %e", mass_residual)
             if count == 99:
                 logger.warn("Failed to converge. Residual %e. Falling back to mltrilinos solver", mass_residual)

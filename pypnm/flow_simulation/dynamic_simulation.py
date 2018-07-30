@@ -156,6 +156,16 @@ class DynamicSimulation(Simulation):
 
             self.pi_nghs_of_w_sinks_interior[pi] = ngh_pores_interior
 
+
+        self.pi_nghs_of_w_outlet_dirichlet_interior = {}
+        for pi in self.bc.pi_list_press_outlet:
+            ngh_pores_interior = np.setdiff1d(self.network.ngh_pores[pi], self.bc.pi_list_press_outlet, assume_unique=True)
+            if len(ngh_pores_interior) == 0:
+                ngh_pores_interior = self.network.ngh_pores[pi]
+
+            self.pi_nghs_of_w_outlet_dirichlet_interior[pi] = ngh_pores_interior
+
+
     def advance_in_sat(self, delta_s, callbacks=[]):
         """
         Advances the simulation by a specified saturation.
@@ -573,15 +583,20 @@ class DynamicSimulation(Simulation):
 
     def __update_capillary_pressure(self):
         self.pc_comp.compute()
-
         if len(self.bc.pi_list_press_inlet) > 0:
             self.network.pores.p_c[self.bc.pi_list_press_inlet] = self.bc.press_inlet_nw - self.bc.press_inlet_w
 
         if len(self.bc.pi_list_press_outlet) > 0:
-            gamma = self.fluid_properties['gamma']
-            pi_out = self.bc.pi_list_press_outlet
-            self.network.pores.p_c[pi_out] = JNModel.sat_to_pc_func(sat=1.e-7, gamma=gamma,
-                                                                    r=self.network.pores.r[pi_out])
+            gamma = self.fluid_properties["gamma"]
+            ngh_pores = self.network.ngh_pores
+            p_c = self.network.pores.p_c
+            pi_out_list = self.bc.pi_list_press_outlet
+            min_p_c = JNModel.sat_to_pc_func(sat=1.e-7, gamma=gamma, r=self.network.pores.r[pi_out_list])
+
+            for pi in pi_out_list:
+                p_c[pi] = max(p_c[self.pi_nghs_of_w_outlet_dirichlet_interior[pi]])
+
+            p_c[pi_out_list] = np.maximum(p_c[pi_out_list], min_p_c)
 
     def __advance(self, stop_criterion, callbacks):
         network = self.network

@@ -50,6 +50,19 @@ class SubNetwork(PoreNetwork):
         sup_pore_list = component.pore_list_from_bbox(sup_network, bounding_box)
         return cls(sup_network, sup_pore_list)
 
+    @classmethod
+    def centered_subnetwork(cls, network, size=0.5):
+        L_x, L_y, L_z = network.dim
+        x_min = np.min(network.pores.x)
+        y_min = np.min(network.pores.y)
+        z_min = np.min(network.pores.z)
+
+        bbox = BoundingBox(xmin=x_min + 0.5 * L_x - size*0.5, xmax=x_min + 0.5 * L_x + size*0.5,
+                           ymin=y_min + 0.5 * L_y - size*0.5, ymax=y_min + 0.5 * L_y + size*0.5,
+                           zmin=z_min + 0.5 * L_z - size*0.5, zmax=z_min + 0.5 * L_z + size*0.5)
+
+        return cls.from_bounding_box(network, bbox)
+
     @staticmethod
     def _local_to_global_maps(sup_network, sup_pore_list):
         pi_local_to_global = np.array(sup_pore_list, dtype=np.int32)

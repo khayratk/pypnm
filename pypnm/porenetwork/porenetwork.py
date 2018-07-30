@@ -453,12 +453,12 @@ class PoreNetwork(object):
 
         self._create_helper_properties()
 
-    def rotate_around_z_axis(self, angle):
+    def rotate_around_z_axis(self, theta):
         x, y, z = self.pores.x, self.pores.y, self.pores.z
         x_center, y_center, z_center = np.mean(x), np.mean(y), np.mean(z)
 
-        x_r = x_center + (x - x_center) * np.cos(angle) - (y - y_center) * np.sin(angle)
-        y_r = y_center + (x - x_center) * np.sin(angle) + (y - y_center) * np.cos(angle)
+        x_r = x_center + (x - x_center) * np.cos(theta) - (y - y_center) * np.sin(theta)
+        y_r = y_center + (x - x_center) * np.sin(theta) + (y - y_center) * np.cos(theta)
 
         self.pores.x[:] = x_r
         self.pores.y[:] = y_r
