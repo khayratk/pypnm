@@ -5,7 +5,7 @@ from numpy.linalg import norm
 from petsc4py import PETSc
 from pypnm.linalg.laplacianmatrix import LaplacianMatrix, laplacian_from_network
 from pypnm.linalg.linear_system_solver import _ref_residual_inf, logger
-from pypnm.linalg.petsc_interface import get_petsc_ksp
+from pypnm.linalg.petsc_interface import get_petsc_ksp, petsc_solve_lu
 from pypnm.linalg.trilinos_interface import matrix_scipy_to_epetra, vector_numpy_to_epetra, trilinos_ml_prec, \
     trilinos_solve, solve_aztec
 try:
@@ -94,6 +94,10 @@ class PressureSolverDynamicDirichlet(object):
             ksp = get_petsc_ksp(A=A * sf, ksptype="minres", tol=tol, max_it=1000)
             petsc_rhs = PETSc.Vec().createWithArray(self.rhs * sf, comm=comm)
 
+        elif solver == "petsclu":
+            comm = MPI.COMM_SELF
+            petsc_rhs = PETSc.Vec().createWithArray(self.rhs * sf, comm=comm)
+
         elif "trilinos" in solver:
             epetra_mat = matrix_scipy_to_epetra(A * sf)
             epetra_rhs = vector_numpy_to_epetra(self.rhs * sf)
@@ -116,6 +120,9 @@ class PressureSolverDynamicDirichlet(object):
                 ksp.solve(petsc_rhs, petsc_sol)
 
                 self.sol[:] = petsc_sol.getArray()
+
+            elif solver == "petsclu":
+                self.sol[:] = petsc_solve_lu(A=A*sf, rhs=petsc_rhs)
 
             elif "trilinos" in solver:
                 epetra_sol = vector_numpy_to_epetra(self.sol)
