@@ -1,6 +1,6 @@
 import numpy as np
 
-from pypnm.percolation.invasion_percolation_refactored import site_bond_invasion_percolation
+from pypnm.percolation.invasion_percolation_generators import site_bond_invasion_percolation
 from pypnm.porenetwork.network_factory import structured_network
 from pypnm.util.igraph_utils import network_to_igraph
 

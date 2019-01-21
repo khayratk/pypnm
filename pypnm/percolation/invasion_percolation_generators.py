@@ -1,9 +1,41 @@
-import numpy as np
 from heapq import heappop, heappush
+
+import numpy as np
+
+
+def _add_cluster_to_frontier(c_id, clusters, frontier_vertices, frontier_edges,
+                             frontier_vertex_marker, frontier_edge_marker,
+                             cluster_id_vertices, cluster_id_edges,
+                             edge_weights, vertex_weights, edge_list, ngh_edges):
+    """
+    Adds all vertices and edges of cluster with id c_id to frontier.
+    """
+    cluster_vertices, cluster_edges = clusters.pop(c_id)
+
+    for e1 in cluster_edges:
+        frontier_edge_marker[e1] = 1
+        cluster_id_edges[e1] = -1
+        for v_ngh in edge_list[e1]:
+            if frontier_vertex_marker[v_ngh] == 0:
+                heappush(frontier_vertices, (vertex_weights[v_ngh], v_ngh))
+                frontier_vertex_marker[v_ngh] = 1
+
+    for v1 in cluster_vertices:
+        frontier_vertex_marker[v1] = 1
+        cluster_id_vertices[v1] = -1
+        for e_ngh in ngh_edges[v1]:
+            if frontier_edge_marker[e_ngh] == 0:
+                heappush(frontier_edges, (edge_weights[e_ngh], e_ngh))
+                frontier_edge_marker[e_ngh] = 1
+
+    return (clusters, frontier_vertices, frontier_edges,
+            frontier_vertex_marker, frontier_edge_marker,
+            cluster_id_vertices, cluster_id_edges)
 
 
 def site_bond_invasion_percolation(graph, edge_weights, source_vertices,
-                                   clusters = dict(), vertex_weights=None, cluster_id_vertices=None, cluster_id_edges=None):
+                                   clusters=dict(), vertex_weights=None, cluster_id_vertices=None,
+                                   cluster_id_edges=None):
     """
     Parameters
     ----------
@@ -11,7 +43,7 @@ def site_bond_invasion_percolation(graph, edge_weights, source_vertices,
     edge_weights: ndarray
     vertex_weights: ndarray
     source_vertices: list
-        source vertices
+        source vertices for invasion percolation
     clusters (optional): dictionary
         dictionary mapping cluster id to cluster given in the form of (V,E)
     cluster_id_vertices (optional): ndarray
@@ -22,6 +54,10 @@ def site_bond_invasion_percolation(graph, edge_weights, source_vertices,
     -------
     invasion_events: list
         list of tuples in the form (edge_id, vertex_id, weight) corresponding to invasion events
+
+    Notes
+    ------
+    If cluster_id is positive, then vertex/edge is assumed to be connected
     """
 
     if not isinstance(edge_weights, (np.ndarray, np.generic)):
@@ -40,11 +76,15 @@ def site_bond_invasion_percolation(graph, edge_weights, source_vertices,
     ngh_edges = graph.get_inclist()
     edge_list = graph.get_edgelist()
 
+    # Markers arrays to mark if the vertex or edge has already been added to the frontier queue
     frontier_edge_marker = np.zeros(graph.ecount(), dtype=np.bool)
     frontier_vertex_marker = np.zeros(graph.vcount(), dtype=np.bool)
 
     edge_invaded = np.zeros(graph.ecount(), dtype=np.bool)
     vertex_invaded = np.zeros(graph.vcount(), dtype=np.bool)
+
+    edge_invaded[cluster_id_edges >= 0] = 1
+    vertex_invaded[cluster_id_vertices >= 0] = 1
 
     frontier_edges = []  # priority queue with list of tuples storing (entry pressure, edge index)
     frontier_vertices = []  # priority queue with list of tuples storing (entry pressure,  vertex index)
@@ -56,10 +96,10 @@ def site_bond_invasion_percolation(graph, edge_weights, source_vertices,
                 frontier_edge_marker[e_ngh] = 1
 
     while frontier_edges or frontier_vertices:
-        # Invade edge
+        # Invade edge if there are no frontier vertices or if the entry pressure of the frontier edge is smaller
+        # than that of the frontier vertex
         if (not frontier_vertices) or (frontier_edges and (frontier_edges[0][0] < frontier_vertices[0][0])):
-            tmp = heappop(frontier_edges)
-            weight, e = tmp
+            weight, e = heappop(frontier_edges)
             if edge_invaded[e] == 0:
                 edge_invaded[e] = 1
                 yield (0, e, weight)
@@ -74,17 +114,16 @@ def site_bond_invasion_percolation(graph, edge_weights, source_vertices,
 
             if (v is not None) and (cluster_id_vertices[v] >= 0):
                 c_id = cluster_id_vertices[v]
-                cluster = clusters.pop(c_id)
-                for e1 in cluster[1]:
-                    frontier_edge_marker[e1] = 1
-                for v1 in cluster[0]:
-                    frontier_vertex_marker[v1] = 1
-                    cluster_id_vertices[v1] = -1
-                    for e_ngh in ngh_edges[v]:
-                        if frontier_edge_marker[e_ngh] == 0:
-                            heappush(frontier_edges, (edge_weights[e_ngh], e_ngh))
-                            frontier_edge_marker[e_ngh] = 1
 
+                (clusters, frontier_vertices, frontier_edges, frontier_vertex_marker, frontier_edge_marker,
+                 cluster_id_vertices,
+                 cluster_id_edges) = _add_cluster_to_frontier(c_id, clusters, frontier_vertices, frontier_edges,
+                                                              frontier_vertex_marker, frontier_edge_marker,
+                                                              cluster_id_vertices, cluster_id_edges,
+                                                              edge_weights, vertex_weights, edge_list,
+                                                              ngh_edges)
+
+            # If vertex v does not belong to a cluster, add it to frontier vertices.
             elif (v is not None) and (cluster_id_vertices[v] == -1):
                 heappush(frontier_vertices, (vertex_weights[v], v))
                 frontier_vertex_marker[v] = 1
@@ -101,15 +140,15 @@ def site_bond_invasion_percolation(graph, edge_weights, source_vertices,
 
                     if cluster_id_edges[e_ngh] >= 0:
                         c_id = cluster_id_edges[e_ngh]
-                        cluster = clusters.pop(c_id)
-                        for e1 in cluster[1]:
-                            frontier_edge_marker[e1] = 1
-                        for v1 in cluster[0]:
-                            cluster_id_vertices[v1] = -1
-                            for v_ngh, e_ngh in zip(ngh_vertices[v], ngh_edges[v]):
-                                if frontier_edge_marker[e_ngh] == 0:
-                                    heappush(frontier_edges, (edge_weights[e_ngh], e_ngh))
-                                    frontier_edge_marker[e_ngh] = 1
-                    else:
+
+                        (clusters, frontier_vertices, frontier_edges, frontier_vertex_marker, frontier_edge_marker,
+                         cluster_id_vertices,
+                         cluster_id_edges) = _add_cluster_to_frontier(c_id, clusters, frontier_vertices, frontier_edges,
+                                                                      frontier_vertex_marker, frontier_edge_marker,
+                                                                      cluster_id_vertices, cluster_id_edges,
+                                                                      edge_weights, vertex_weights, edge_list,
+                                                                      ngh_edges)
+
+                    elif cluster_id_edges[e_ngh] == -1:
                         heappush(frontier_edges, (edge_weights[e_ngh], e_ngh))
                         frontier_edge_marker[e_ngh] = 1
