@@ -56,5 +56,6 @@ if __name__ == "__main__":
     network.set_radius_pores(network.pi_in, np.max(network.pores.r) * 5)
 
     network.restrict_volume([0.1, 0.9, 0.1, 0.9, 0.1, 0.9])
-    network.set_zero_volume_at_inout()
+    network.set_zero_volume_pores(network.pi_list_face["EAST"])
+    network.set_zero_volume_pores(network.pi_list_face["WEST"])
     run_quasi_static(network)

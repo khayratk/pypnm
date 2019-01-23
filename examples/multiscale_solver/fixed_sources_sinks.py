@@ -24,7 +24,7 @@ def multiscale_simulation(restart):
     comm = Epetra.PyComm()
     mpicomm = MPI.COMM_WORLD
     my_id = comm.MyPID()
-
+    print(my_id)
     if restart:
         multiscale_sim = MultiScaleSimUnstructured.load()
         if my_id == 0:
@@ -44,7 +44,7 @@ def multiscale_simulation(restart):
                 network = PoreNetwork.load("benchmark_network.pkl")
 
             except IOError:
-                network = unstructured_network_delaunay(nr_pores=10000)
+                network = unstructured_network_delaunay(nr_pores=200000)
                 # Remove pore throats between inlet and outlet pores. This is to avoid high pressure at the inlet
                 network = remove_tubes_between_face_pores(network, EAST)
                 network = remove_tubes_between_face_pores(network, WEST)

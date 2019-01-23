@@ -7,3 +7,4 @@ pypnm API Reference
    ams
    multiscale
    porenetwork
+   component

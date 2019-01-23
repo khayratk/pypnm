@@ -2,10 +2,9 @@ import cPickle as pickle
 import logging
 import os
 
+import component
 import h5py
 import numpy as np
-
-import component
 from pypnm.porenetwork.constants import *
 from pypnm.postprocessing.vtk_output import VtkWriterNetwork
 from pypnm.util.bounding_box import BoundingBox
@@ -14,10 +13,14 @@ logger = logging.getLogger('pypnm.porenetwork')
 from pypnm.postprocessing.plot_functions import plot_save_histogram
 
 
+# TODO: Inconsistency of terms. Sometimes tubes is used, and sometimes throats
+
 class PoreNetwork(object):
     @property
     def total_pore_vol(self):
         """
+        Total pore volume
+
         Returns
         _______
         out: float
@@ -28,6 +31,8 @@ class PoreNetwork(object):
     @property
     def total_throat_vol(self):
         """
+        Total throat volume
+
         Returns
         _______
         out: float
@@ -38,6 +43,8 @@ class PoreNetwork(object):
     @property
     def total_vol(self):
         """
+        Total void volume (sum of pore and throat volumes)
+
         Returns
         _______
         out: float
@@ -45,10 +52,11 @@ class PoreNetwork(object):
         """
         return self.total_pore_vol + self.total_throat_vol
 
-
     @property
     def porosity(self):
         """
+        Porosity based on total void volume and bounding box
+
         Returns
         _______
         out: float
@@ -59,15 +67,17 @@ class PoreNetwork(object):
         len_y = np.max(pores.y) - np.min(pores.y)
         len_z = np.max(pores.z) - np.min(pores.z)
 
-        return self.total_vol/(len_x * len_y *len_z)
+        return self.total_vol / (len_x * len_y * len_z)
 
     @property
     def dim(self):
         """
+        Returns phyiscal dimensions of pore-network
+
         Returns
         _______
-        out: tuple
-            physical dimensions of pore network
+        out: 3-tuple
+            lengths along the x-,y-, and z-axes
         """
         x_min = np.min(self.pores.x)
         x_max = np.max(self.pores.x)
@@ -85,6 +95,10 @@ class PoreNetwork(object):
     @property
     def edge_vectors(self):
         """
+        Computes the edge vectors, which are position vectors representing the position of one neighboring
+        vertex (pore) of an edge (throat) with respect to the other neighboring vertex. The orientation of the position
+        vector is such that it starts from the edge's first neighbor to its second, as stored self.edgelist.
+
         Returns
         _______
         out: ndarray
@@ -100,6 +114,8 @@ class PoreNetwork(object):
     @property
     def edge_orientations(self):
         """
+        Computes the normalized edge vectors.
+
         Returns
         _______
         out: ndarray
@@ -108,7 +124,7 @@ class PoreNetwork(object):
         """
         edge_vectors = self.edge_vectors
 
-        return (edge_vectors.T/ np.linalg.norm(edge_vectors, axis =1)).T
+        return (edge_vectors.T / np.linalg.norm(edge_vectors, axis=1)).T
 
     def distribute_throat_volume_to_neighboring_pores(self):
         """
@@ -116,7 +132,8 @@ class PoreNetwork(object):
         """
         pores_1 = self.edgelist[:, 0]
         pores_2 = self.edgelist[:, 1]
-        vol_increment_pore_1 = self.tubes.vol*self.pores.vol[pores_1]/(self.pores.vol[pores_1]+self.pores.vol[pores_2])
+        vol_increment_pore_1 = self.tubes.vol * self.pores.vol[pores_1] / (
+                    self.pores.vol[pores_1] + self.pores.vol[pores_2])
         vol_increment_pore_2 = self.tubes.vol - vol_increment_pore_1
         np.add.at(self.pores.vol, pores_1, vol_increment_pore_1)
         np.add.at(self.pores.vol, pores_2, vol_increment_pore_2)
@@ -174,25 +191,50 @@ class PoreNetwork(object):
         logger.debug("Ngh tube Wetting conductances" + np.array_str(self.tubes.k_w[self.ngh_tubes[i]]))
         logger.debug("=" * 40)
 
-    def set_zero_volume_at_inout(self):
-        self.set_zero_volume_pores(self.pi_in)
-        self.set_zero_volume_pores(self.pi_out)
+    def set_zero_volume_pores(self, pi_list=Ellipsis):
+        """
+        Sets the volumes of provided pores to zero
 
-    def set_zero_volume_pores(self, pi_list=None):
-        if pi_list is None:
-            self.pores.vol[:] = self.pores.vol*1e-10
-        else:
-            self.pores.vol[pi_list] = self.pores.vol[pi_list]*1e-10
+        Parameters
+        ----------
+        pi_list: ndarray (optional)
+            Index array of pores for which the volume will be set to zero. If not provided, then all pores
+            will have their volume set to zero.
+        """
+        self.pores.vol[pi_list] = self.pores.vol[pi_list] * 1e-10
 
     def set_zero_volume_all_tubes(self):
+        """
+        Sets volume of all throats to zero
+        """
         self.tubes.vol[:] = 0.0
 
     def set_radius_pores(self, pi_list, r):
+        """
+        Sets radius of selected pores to provided values
+
+        Parameters
+        ----------
+        pi_list: ndarray
+            Index array of pores
+        r: ndarray
+            radius to be set
+        """
         self.pores.r[pi_list] = r
         self.pores.init_area()
         self.pores.init_vol()
 
     def set_radius_tubes(self, ti_list, r):
+        """
+        Sets radius of selected throats to provided values
+
+        Parameters
+        ----------
+        ti_list: ndarray
+            Index array of throats
+        r: ndarray
+            radius to be set
+        """
         self.tubes.r[ti_list] = r
         self.tubes.init_area()
         self.tubes.init_vol()
@@ -312,10 +354,19 @@ class PoreNetwork(object):
     def add_pores(self, pos_x, pos_y, pos_z, radii, G=None):
         """
         Adds pores to the pore-network
-        :param pos_x: Array of X positions of the added pores
-        :param pos_y: Array of Y positions of the added pores
-        :param pos_z: Array of Z positions of the added pores
-        :param radii: Array of radii of the added pores
+
+        Parameters
+        ----------
+        pos_x: ndarray
+            Array of X positions of the added pores
+        pos_y: ndarray
+            Array of Y positions of the added pores
+        pos_z: ndarray
+            Array of Z positions of the added pores
+        radii: ndarray
+            Array of radii of the added pores
+        G: ndarray (optional)
+            Array of shape factor of added pores
         """
         assert len(pos_x) == len(pos_y)
         assert len(pos_y) == len(pos_z)
@@ -340,7 +391,7 @@ class PoreNetwork(object):
 
         self._create_helper_properties()
 
-    def add_throats(self, edgelist, r=None, l=None, l_tot = None, G=None):
+    def add_throats(self, edgelist, r=None, l=None, l_tot=None, G=None):
         """
         Adds throats to network
 
@@ -371,7 +422,7 @@ class PoreNetwork(object):
         if G is None:
             G = np.ones(nr_new_tubes) * np.mean(self.tubes.G)
 
-        self.tubes.append_tubes(r=r, l=l, G=G, l_tot = l_tot)
+        self.tubes.append_tubes(r=r, l=l, G=G, l_tot=l_tot)
 
         self.edgelist = np.vstack((self.edgelist, edgelist))
 
@@ -400,7 +451,7 @@ class PoreNetwork(object):
 
         Parameters
         ----------
-        ti_list_delete: intarray
+        ti_list_delete: ndarray
             Indices of throats to be deleted
 
         Notes
@@ -454,6 +505,15 @@ class PoreNetwork(object):
         self._create_helper_properties()
 
     def rotate_around_z_axis(self, theta):
+        """
+        Rotate network around z-axis
+
+        Parameters
+        ----------
+        theta: float
+            angle in radians
+
+        """
         x, y, z = self.pores.x, self.pores.y, self.pores.z
         x_center, y_center, z_center = np.mean(x), np.mean(y), np.mean(z)
 
@@ -519,7 +579,7 @@ class PoreNetwork(object):
             f['/pores/radius'] = self.pores.r
             f['/pores/shape_factor'] = self.pores.G
             f['/pores/vol'] = self.pores.vol
-            f['/pores/clay_vol'] = self.pores.vol*0.01
+            f['/pores/clay_vol'] = self.pores.vol * 0.01
             f['/pores/x'] = self.pores.x
             f['/pores/y'] = self.pores.y
             f['/pores/z'] = self.pores.z
@@ -535,7 +595,7 @@ class PoreNetwork(object):
             f['/tubes/length_pore_2'] = self.pores.l[self.edgelist[:, 1]]
             f['/tubes/length_throat'] = self.tubes.l
             f['/tubes/vol'] = self.tubes.vol
-            f['/tubes/clay_vol'] = self.tubes.vol*0.01
+            f['/tubes/clay_vol'] = self.tubes.vol * 0.01
 
     def write_network_statistics(self, folder_name="network_statistics"):
         """
@@ -547,6 +607,9 @@ class PoreNetwork(object):
             Name of folder in which the plots will be stored
 
         """
+
+        # TODO: Fix plots. Plots currently plot without labels
+
         if folder_name[-1] != "/":
             folder_name += "/"
 
@@ -600,4 +663,3 @@ class PoreNetwork(object):
         input_file = open(filename + ".pkl", 'rb')
         network = pickle.load(input_file)
         return network
-

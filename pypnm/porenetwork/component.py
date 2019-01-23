@@ -41,19 +41,22 @@ def pore_list_from_bbox(network, bounding_box):
 
 def pore_list_ngh_to_pore_list(network, pi_list):
     """
+    Returns a list of pores which are adjacent to pores in pi_list. This list may include repetitions when
+    pores in pi_list have common neighboring pores.
+
     Parameters
-    ___________
+    ----------
     network: PoreNetwork
     pi_list: list
         list of pores to fine
 
     Returns
-    ________
-    ngh_pores_list: Pore list adjacent to list of pores.
+    -------
+    ngh_pores_list: ndarray
+        Index array of pores adjacent to list of pores.
 
     Notes
-    ______
-    This list may include repetitions when pores in pi_list have common neighboring pores.
+    -------
     The order of the pore indices in the returned list corresponds to pi_list.
     """
     if len(pi_list) == 0:
@@ -74,12 +77,21 @@ def pore_list_ngh_to_pore_list(network, pi_list):
 
 def tube_list_ngh_to_pore_list(network, pi_list):
     """
-    :network: Network object
-    :pi_list: Pore index list
-    :return: Tube list adjacent to list of pores.
+    Returns a list of tubes which are adjacent to pores in pi_list. This list may include repetitions when
+    pores in pi_list have common neighboring tubes.
 
-    :Note: This list may include repetitions when pores in pi_list have common neighboring tubes.
-            The order of the tube indices in the returned list corresponds to pi_list.
+    Parameters
+    ----------
+    network: PoreNetwork
+    pi_list: list
+        list of pores to fine
+
+
+    Returns
+    -------
+    ngh_tubes_list: ndarray
+        Index array of tubes adjacent to list of pores.
+
     """
     temp_marker = np.zeros(network.nr_p, dtype=np.int32)
     temp_marker[pi_list] = 1
