@@ -21,12 +21,12 @@ def test_flow_matrix():
     return A
 
 
-print test_flow_matrix().todense()
-
-
 def test_laplacianmatrix():
     network = cube_network(N=20)
-    laplacian = laplacian_from_network(network, weights=network.tubes.r)
+    A = laplacian_from_network(network, weights=network.tubes.r)
+    sum_cols = A * np.ones(A.shape[0])
+
+    assert np.allclose(sum_cols, 0.0, rtol=1e-10)
 
 
 def test_laplacian_from_igraph():
@@ -46,9 +46,9 @@ def test_laplacian_from_igraph():
     random_weights = np.random.rand(graph.ecount())
     A = laplacian_from_igraph(graph, random_weights)
 
-    sum_cols_of_A = A * np.ones(graph.vcount())
+    sum_cols = A * np.ones(graph.vcount())
 
-    assert np.allclose(sum_cols_of_A, 0.0, rtol=1e-10)
+    assert np.allclose(sum_cols, 0.0, rtol=1e-10)
 
     # Test with random number of dirichlet boundaries
     num_of_dirichlet = np.random.randint(0, graph.vcount())
@@ -56,6 +56,6 @@ def test_laplacian_from_igraph():
     random_weights = np.random.rand(graph.ecount())
     A = laplacian_from_igraph(graph, weights=random_weights, ind_dirichlet=ind_dirichlet)
 
-    sum_cols_of_A = A * np.ones(graph.vcount())
+    sum_cols = A * np.ones(graph.vcount())
 
-    assert np.isclose(np.sum(sum_cols_of_A), num_of_dirichlet, rtol=1e-10)
+    assert np.isclose(np.sum(sum_cols), num_of_dirichlet, rtol=1e-10)

@@ -12,22 +12,48 @@ def get_adjlist(A):
 
     Returns
     -------
-    adjacency list of equivalent undirected graph
+    adjlist: list of lists
+        adjacency list of equivalent undirected graph
     """
 
     A = A.tocsr()
     indices = A.indices
     indptr = A.indptr
-    adjlist = [filter(lambda x: x != i, indices[indptr[i]:indptr[i+1]].tolist()) for i in xrange(A.shape[0])]
+    adjlist = [filter(lambda x: x != i, indices[indptr[i]:indptr[i + 1]].tolist()) for i in xrange(A.shape[0])]
 
     return adjlist
 
 
 def flow_matrix_from_graph(graph, press, cond, ind_dirichlet=None, val_dirichlet=1.0):
+    """
+    Creates a matrix, where the i,j th entry corresponds to a flux from the i-th vertex to the j-th vertex.
+    The flux is computed from the pressure and conductance provided.
+    This is used for computing advection.
+
+    Parameters
+    ----------
+    graph: igraph Graph
+
+    press: ndarray
+        Pressure at each vertex
+
+    cond: ndarray
+        Conductance at each edge
+
+    ind_dirichlet: array_like, optional
+        index array of vertices which are to have a dirichlet boundary condition applied to them
+
+    val_dirichlet: array_like, optional
+        Value of dirichlet boundary condition of vertices in ind_dirichlet
+
+    Returns
+    -------
+    B: csr_matrix
+        Flow Matrix
+
+    """
     edges = graph.get_edgelist()
-    edges = zip(*edges)
-    rows = edges[0]
-    cols = edges[1]
+    rows, cols = zip(*edges)
 
     press = np.asarray(press)
     cond = np.asarray(cond)
@@ -36,18 +62,18 @@ def flow_matrix_from_graph(graph, press, cond, ind_dirichlet=None, val_dirichlet
 
     # Make matrix symmetric
     rows, cols = np.hstack((rows, cols)), np.hstack((cols, rows))
-    cond = np.hstack((cond,cond))
+    cond = np.hstack((cond, cond))
 
-    data = np.maximum((press[rows]-press[cols])*cond, 0.0)
+    data = np.maximum((press[rows] - press[cols]) * cond, 0.0)
 
     diagonal_dirichlet = np.zeros(nv)
 
     off_diag = csr_matrix((data, (rows, cols)), shape=(nv, nv))
 
     diag = eye(nv, format="csr")
-    diag.setdiag(-(off_diag*np.ones(nv)))
+    diag.setdiag(-(off_diag * np.ones(nv)))
 
-    B = coo_matrix((off_diag+diag).T)
+    B = coo_matrix((off_diag + diag).T)
 
     if ind_dirichlet is not None:
         mask = np.zeros(nv, dtype=np.bool)
@@ -56,13 +82,11 @@ def flow_matrix_from_graph(graph, press, cond, ind_dirichlet=None, val_dirichlet
         B.data[mask_rows] = 0.0
         diagonal_dirichlet[ind_dirichlet] = val_dirichlet
 
-
     return csr_matrix(B)
 
 
 def _laplacian(edgelist, weights=None, ind_dirichlet=None, val_dirichlet=1.0):
-    rows = edgelist[0]
-    cols = edgelist[1]
+    rows, cols = edgelist
     nv = max(np.max(rows), np.max(cols)) + 1
 
     if weights is None:
@@ -88,13 +112,15 @@ def _laplacian(edgelist, weights=None, ind_dirichlet=None, val_dirichlet=1.0):
     off_diag = csr_matrix((data, (rows, cols)), shape=(nv, nv))
 
     diag = eye(nv, format="csr")
-    diag.setdiag(-(off_diag*np.ones(nv)) + diagonal_dirichlet)
+    diag.setdiag(-(off_diag * np.ones(nv)) + diagonal_dirichlet)
 
     return off_diag + diag
 
 
 def laplacian_from_network(network, weights=None, ind_dirichlet=None):
     """
+    Creates a Laplacian matrix given a network, and a set of optional weights and dirichlet locations.
+
     Parameters
     ----------
     network: PoreNetwork
@@ -116,6 +142,8 @@ def laplacian_from_network(network, weights=None, ind_dirichlet=None):
 
 def laplacian_from_igraph(graph, weights=None, ind_dirichlet=None, val_dirichlet=1.0):
     """
+    Creates a Laplacian matrix given an igraph Graph, and a set of optional weights and dirichlet locations.
+
     Parameters
     ----------
     network: igraph
@@ -132,15 +160,14 @@ def laplacian_from_igraph(graph, weights=None, ind_dirichlet=None, val_dirichlet
     """
     edges = graph.get_edgelist()
     edges = zip(*edges)
-    row = edges[0]
-    col = edges[1]
+    row, col = edges
 
     return _laplacian((row, col), weights, ind_dirichlet, val_dirichlet)
 
 
 class LaplacianMatrix(object):
     """
-    Class to store the laplacian matrix obtained from a network and efficiently update its entries.
+    Class create and efficiently modify a Laplacian matrix.
 
     Parameters
     ----------
@@ -148,7 +175,7 @@ class LaplacianMatrix(object):
 
     Notes
     ----------
-    This class when several laplacian matrices need to be created with the same structure
+    This class is useful when several laplacian matrices need to be created with the same structure
     """
 
     def __init__(self, network):
@@ -253,7 +280,7 @@ class LaplacianMatrix(object):
         """
         csr_matrix.data[self._data_diag_ind[row_indices]] = val
 
-        mask = self.mask_from_indices(row_indices, self.N)
+        mask = self._mask_from_indices(row_indices, self.N)
         # data_diag_mask_bnd = (mask[self.row]) & (mask[self.col]) & self._data_diag_mask
         # data_nondiag_mask_bnd = (mask[self.row]) & np.logical_not(data_diag_mask_bnd)
         data_nondiag_mask_bnd = np.logical_not(self._data_diag_mask) & (mask.take(self.row))
@@ -275,7 +302,7 @@ class LaplacianMatrix(object):
         csr_matrix.data[data_diag_mask & (csr_matrix.data == 0.0)] = 1.0
 
     @staticmethod
-    def mask_from_indices(indices, N):
+    def _mask_from_indices(indices, N):
         mask = np.zeros(N, dtype=np.bool)
         mask[indices] = True
         return mask
@@ -295,33 +322,69 @@ class LaplacianMatrix(object):
 
         self.data[self._data_diag_ind[row_indices]] = 1.0
         self.set_offdiag_row_entries_to_zero(row_indices)
-        self.set_singular_rows_to_dirichlet()
+        self._set_singular_rows_to_dirichlet()
 
     def set_offdiag_col_entries_to_zero(self, col_indices):
-        mask = self.mask_from_indices(col_indices, self.N)
+        """
+        Sets off-diagonal entries of given columns to zero
+
+        Parameters
+        ----------
+        col_indices: array_like
+            array index of columns for which off diagonal entries will be set to zero
+
+        """
+        mask = self._mask_from_indices(col_indices, self.N)
         data_diag_mask = (mask[self.row]) & (mask[self.col]) & self._data_diag_mask
         data_nondiag_mask = (mask[self.col]) & np.logical_not(data_diag_mask)
         self.data[data_nondiag_mask] = 0.0
 
     def set_offdiag_row_entries_to_zero(self, row_indices):
-        mask = self.mask_from_indices(row_indices, self.N)
+        """
+        Sets off-diagonal entries of given rows to zero
+
+        Parameters
+        ----------
+        row_indices: array_like
+            array index of rows for which off diagonal entries will be set to zero
+
+        """
+        mask = self._mask_from_indices(row_indices, self.N)
         data_diag_mask = (mask[self.row]) & (mask[self.col]) & self._data_diag_mask
         data_nondiag_mask = (mask[self.row]) & np.logical_not(data_diag_mask)
         self.data[data_nondiag_mask] = 0.0
 
-    def set_singular_rows_to_dirichlet(self):
+    def _set_singular_rows_to_dirichlet(self):
         data_diag_mask = np.zeros(self.coo_len, dtype=np.bool)
         data_diag_mask[self._data_diag_ind] = True
         self.data[data_diag_mask & (self.data == 0.0)] = 1.0
 
     def get_coo_matrix(self):
+        """
+        Returns
+        -------
+        out: coo_matrix
+            laplacian matrix in the coo_matrix format
+        """
         nr_p = self.N
         return coo_matrix((np.copy(self.data), (np.copy(self.row), np.copy(self.col))), shape=(nr_p, nr_p))
 
     def get_csr_matrix(self):
+        """
+        Returns
+        -------
+        out: csr_matrix
+            laplacian matrix in the csr_matrix format
+        """
         nr_p = self.N
         return csr_matrix((np.copy(self.data), (np.copy(self.row), np.copy(self.col))), shape=(nr_p, nr_p))
 
     def get_csc_matrix(self):
+        """
+        Returns
+        -------
+        out: csc_matrix
+            laplacian matrix in the csc_matrix format
+        """
         nr_p = self.N
         return csc_matrix((np.copy(self.data), (np.copy(self.row), np.copy(self.col))), shape=(nr_p, nr_p))

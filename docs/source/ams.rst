@@ -3,10 +3,9 @@ Algebraic MultiScale (AMS)
 
 .. automodule:: pypnm.ams
 
-.. automodule:: pypnm.ams.msfv
+.. automodule:: pypnm.ams.msrsb
     :members:
-    :exclude-members: MSFV
 
-.. autoclass:: MSFV
+.. autoclass:: MSRSB
     :members:
     :member-order:

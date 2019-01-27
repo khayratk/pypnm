@@ -219,6 +219,8 @@ def tubes_from_to_pore_sets(network, pi_list1, pi_list2):
 
 def tubes_within_pore_set(network, pi_list):
     """
+    Index array of tubes having both neighboring pores in pi_list
+
     Parameters
     ----------
     network: PoreNetwork
@@ -227,7 +229,8 @@ def tubes_within_pore_set(network, pi_list):
 
     Returns
     -------
-    List of tube indices where each tube has neighboring pores which are both in pi_list
+    ti_list: ndarray
+        Index array of tubes having both neighboring pores in pi_list
 
     """
     mask_pores = np.zeros(network.nr_p, dtype=np.bool)

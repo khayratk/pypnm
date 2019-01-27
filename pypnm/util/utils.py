@@ -4,11 +4,6 @@ import os
 import numpy as np
 
 
-def all_unique(x):
-    seen = set()
-    return not any(i in seen or seen.add(i) for i in x)
-
-
 def sum_by_group(data, groups):
     """
     Sum array by grouping

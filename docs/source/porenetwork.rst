@@ -5,7 +5,3 @@ Pore network (PoreNetwork)
 
 .. automodule:: pypnm.porenetwork.porenetwork
     :members:
-    
-.. autoclass:: PoreNetwork
-    :members:
-    :member-order:

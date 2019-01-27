@@ -122,7 +122,7 @@ class PressureSolverDynamicDirichlet(object):
                 self.sol[:] = petsc_sol.getArray()
 
             elif solver == "petsclu":
-                self.sol[:] = petsc_solve_lu(A=A*sf, rhs=petsc_rhs)
+                self.sol[:] = petsc_solve_lu(A=A*sf, b=petsc_rhs)
 
             elif "trilinos" in solver:
                 epetra_sol = vector_numpy_to_epetra(self.sol)

@@ -1,12 +1,11 @@
 from xml.etree import ElementTree as _ET
+
+import igraph as ig
 import numpy as np
-
+from pypnm.porenetwork.constants import *
 from pypnm.porenetwork.porenetwork import PoreNetwork
-
 from pypnm.porenetwork.pores import Pores
 from pypnm.porenetwork.tubes import Tubes
-from pypnm.porenetwork.constants import *
-import igraph as ig
 
 
 class OpenPnmReader(object):
@@ -33,7 +32,7 @@ class OpenPnmReader(object):
         net = {}
 
         filename = filename.rsplit('.')[0]
-        tree = _ET.parse(filename+'.vtp')
+        tree = _ET.parse(filename + '.vtp')
         piece_node = tree.find('PolyData').find('Piece')
 
         # Extract connectivity
@@ -51,17 +50,16 @@ class OpenPnmReader(object):
             element = key.split('.')[0]
             array = cls._element_to_array(item)
             propname = key.split('.')[1]
-            net.update({element+'.'+propname: array})
+            net.update({element + '.' + propname: array})
         # Extract throat data
         for item in piece_node.find('CellData').iter('DataArray'):
             key = item.get('Name')
             element = key.split('.')[0]
             array = cls._element_to_array(item)
             propname = key.split('.')[1]
-            net.update({element+'.'+propname: array})
+            net.update({element + '.' + propname: array})
 
         return net
-
 
     @staticmethod
     def _element_to_array(element, n=1):
@@ -70,7 +68,7 @@ class OpenPnmReader(object):
         array = np.fromstring(string, sep='\t')
         array = array.astype(dtype)
         if n is not 1:
-            array = array.reshape(array.size//n, n)
+            array = array.reshape(array.size // n, n)
         return array
 
 
@@ -93,14 +91,17 @@ class OpenPnmPoreNetwork(PoreNetwork):
 
         self.periodic_tube_marker = np.zeros(self.nr_t).astype(int)
 
-        self.pores.r[:] = net["pore.GenericNetwork_h9Iy1_equivalent_diameter"][:]/2. * 1.e-6
-        self.pores.l[:] = net["pore.GenericNetwork_h9Iy1_equivalent_diameter"][:]/2. * 1.e-6
+        self.pores.r[:] = net["pore.GenericNetwork_h9Iy1_equivalent_diameter"][:] / 2. * 1.e-6
+        self.pores.l[:] = net["pore.GenericNetwork_h9Iy1_equivalent_diameter"][:] / 2. * 1.e-6
 
         assert np.all(self.pores.l > 0.0)
 
-        self.pores.G[:] = 1./16.
+        self.pores.G[:] = 1. / 16.
         self.pores.vol[:] = net["pore.GenericNetwork_h9Iy1_volume"] * 1.e-18
-        self.pores.x[:], self.pores.y[:], self.pores.z[:] = net["pore.coords"][:, 0] * 1.e-6, net["pore.coords"][:, 1] * 1.e-6, net["pore.coords"][:, 2] * 1.e-6
+        self.pores.x[:], self.pores.y[:], self.pores.z[:] = net["pore.coords"][:, 0] * 1.e-6, net["pore.coords"][:,
+                                                                                              1] * 1.e-6, net[
+                                                                                                              "pore.coords"][
+                                                                                                          :, 2] * 1.e-6
 
         assert np.all(self.pores.vol > 0.0)
 
@@ -116,16 +117,16 @@ class OpenPnmPoreNetwork(PoreNetwork):
         assert np.all(self.edgelist[:, 0] > -1)
         assert np.all(self.edgelist[:, 1] > -1)
 
-        self.tubes.r[:] = net["throat.GenericNetwork_h9Iy1_diameter"]/2.0 * 1.e-6
-        self.tubes.G[:] = 1./16.
+        self.tubes.r[:] = net["throat.GenericNetwork_h9Iy1_diameter"] / 2.0 * 1.e-6
+        self.tubes.G[:] = 1. / 16.
         self.tubes.l[:] = net["throat.GenericNetwork_h9Iy1_length"] * 1.e-6
         self.tubes.l_tot[:] = net["throat.GenericNetwork_h9Iy1_total_length"] * 1.e-6
-        self.tubes.vol[:] = np.pi * self.tubes.r**2 * self.tubes.l
+        self.tubes.vol[:] = np.pi * self.tubes.r ** 2 * self.tubes.l
 
         self.pore_domain_type = np.zeros(self.nr_p, dtype=np.int8)
         self.pore_domain_type[:] = DOMAIN
 
-        n_bnd_pores = int(self.nr_p**(2./3.))
+        n_bnd_pores = int(self.nr_p ** (2. / 3.))
 
         self.pi_list_face = [None, None, None, None, None, None]
         self.pi_list_face[WEST] = np.sort(np.argsort(self.pores.x)[0:n_bnd_pores])
@@ -167,4 +168,3 @@ class OpenPnmPoreNetwork(PoreNetwork):
             self._fix_tubes_larger_than_ngh_pores()
         self._create_helper_properties()
         self.indices = np.asarray(range(self.nr_p))
-

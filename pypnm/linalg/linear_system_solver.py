@@ -1,5 +1,6 @@
 import logging
 import sys
+
 import numpy as np
 import pyamg
 from numpy.linalg import norm
@@ -21,11 +22,14 @@ try:
 
     petsc4py.init(sys.argv)
     from petsc4py import PETSc
+
+    WITH_PETSC = True
 except ImportError:
-    pass
+    WITH_PETSC = False
 
 try:
     from scikits.umfpack import splu, spsolve
+    WITH_UMFPACK=True
 except ImportError:
     pass
 
@@ -134,7 +138,7 @@ def solve_sparse_mat_mat_lu(A, B, solver="petsc"):
         if solver == "scipy":
             xj = lu_A.solve(Bj)
         elif solver == "petsc":
-            xj = petsc_solve_from_ksp(lu_A, Bj * sf, x=None, tol=1e-5)
+            xj = petsc_solve_from_ksp(lu_A, Bj * sf, x0=None, tol=1e-5)
 
         w = np.flatnonzero(xj)
         segment_length = w.shape[0]

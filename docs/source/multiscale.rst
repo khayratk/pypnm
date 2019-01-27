@@ -1,5 +1,5 @@
 Multiscale Simulation (multiscale)
-==========================
+====================================================
 
 .. automodule:: pypnm.multiscale
 

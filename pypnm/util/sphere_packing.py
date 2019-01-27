@@ -6,8 +6,7 @@ from scipy import spatial
 from scipy.interpolate import RegularGridInterpolator
 
 
-
-def neighboring_indices(num_partitions, index):
+def _neighboring_indices(num_partitions, index):
     i, j, k = index
     nx, ny, nz = num_partitions
     neighbors = list()
@@ -24,6 +23,34 @@ def neighboring_indices(num_partitions, index):
 
 
 def sphere_packing(rad, domain_size, is_2d=False):
+    """
+    Computes a non-overlapping random sphere packing
+
+    Parameters
+    ----------
+    rad: ndarray
+        Array of sphere radii
+
+    domain_size: 3-tuple
+        domain size in x, y and z directions
+
+    is_2d: bool (optional)
+        if True, then z-coordinate of all spheres will be 0
+
+    Returns
+    -------
+    x: ndarray
+        Array of sphere x-coords
+
+    y: ndarray
+        Array of sphere y-coords
+
+    z: ndarray
+        Array of sphere z-coords
+
+    r: ndarray
+        Array of sphere radii
+    """
     rad = np.sort(rad)
     rad[:] = rad[::-1]
 
@@ -49,7 +76,7 @@ def sphere_packing(rad, domain_size, is_2d=False):
     nx, ny, nz = int(len_x / delta_h), int(len_y / delta_h), max(int(len_z / delta_h), 1)
 
     for index in product(xrange(nx), xrange(ny), xrange(nz)):
-        ngh_indices_map[index] = neighboring_indices(num_partitions=(nx, ny, nz), index=index)
+        ngh_indices_map[index] = _neighboring_indices(num_partitions=(nx, ny, nz), index=index)
 
     for i in xrange(nr_pores):
         counter = 0
@@ -92,6 +119,37 @@ def sphere_packing(rad, domain_size, is_2d=False):
 
 
 def sphere_packing_from_field(nr_pores, field, domain_size):
+    """
+    Computes a non-overlapping random sphere packing given a field representing the size of a sphere at each location
+
+    Parameters
+    ----------
+    nr_pores: int
+        Number of spheres
+
+    field: ndarray
+        3 - Dimensional array representing a field. The location of the values in field are inferred from domain_size.
+        It is assumed that the points in the field are arranged in a regular lattice.
+
+    domain_size: 3-tuple
+        domain size in x, y and z directions
+
+
+    Returns
+    -------
+    x: ndarray
+        Array of sphere x-coords
+
+    y: ndarray
+        Array of sphere y-coords
+
+    z: ndarray
+        Array of sphere z-coords
+
+    r: ndarray
+        Array of sphere radii
+    """
+
     cell_to_sphere_ids = defaultdict(list)
     ngh_indices_map = dict()
 
@@ -102,7 +160,7 @@ def sphere_packing_from_field(nr_pores, field, domain_size):
     x = np.linspace(0, len_x, field.shape[0])
     y = np.linspace(0, len_y, field.shape[1])
     z = np.linspace(0, len_z, field.shape[2])
-    my_interpolating_function = RegularGridInterpolator((x, y, z), field, method = "nearest")
+    my_interpolating_function = RegularGridInterpolator((x, y, z), field, method="nearest")
 
     dimensions = np.asarray([len_x, len_y, len_z])
     coords = np.zeros([nr_pores, 3])
@@ -112,14 +170,14 @@ def sphere_packing_from_field(nr_pores, field, domain_size):
     nx, ny, nz = int(len_x / delta_h), int(len_y / delta_h), max(int(len_z / delta_h), 1)
 
     for index in product(xrange(nx), xrange(ny), xrange(nz)):
-        ngh_indices_map[index] = neighboring_indices(num_partitions=(nx, ny, nz), index=index)
+        ngh_indices_map[index] = _neighboring_indices(num_partitions=(nx, ny, nz), index=index)
 
     rad = np.zeros(nr_pores)
 
     for i in xrange(nr_pores):
         counter = 0
-        if i%10000 == 0:
-            print i, np.sum(4/3.*rad**3*np.pi)/(len_x*len_y*len_z)
+        if i % 10000 == 0:
+            print i, np.sum(4 / 3. * rad ** 3 * np.pi) / (len_x * len_y * len_z)
         while True:
             new_coord = np.random.rand(3) * dimensions
             index = int(new_coord[0] * nx / len_x), int(new_coord[1] * ny / len_y), int(new_coord[2] * nz / len_z)
@@ -158,4 +216,3 @@ def sphere_packing_from_field(nr_pores, field, domain_size):
             assert dist[local_index] > (rad[i] + rad[i_ngh])
 
     return coords[:, 0], coords[:, 1], coords[:, 2], rad
-
