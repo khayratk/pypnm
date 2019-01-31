@@ -70,9 +70,9 @@ class SubNetwork(PoreNetwork):
         y_min = np.min(network.pores.y)
         z_min = np.min(network.pores.z)
 
-        bbox = BoundingBox(xmin=x_min + 0.5 * L_x - size_x*0.5, xmax=x_min + 0.5 * L_x + size_z*0.5,
+        bbox = BoundingBox(xmin=x_min + 0.5 * L_x - size_x*0.5, xmax=x_min + 0.5 * L_x + size_x*0.5,
                            ymin=y_min + 0.5 * L_y - size_y*0.5, ymax=y_min + 0.5 * L_y + size_y*0.5,
-                           zmin=z_min + 0.5 * L_z - size_z*0.5, zmax=z_min + 0.5 * L_z + size_x*0.5)
+                           zmin=z_min + 0.5 * L_z - size_z*0.5, zmax=z_min + 0.5 * L_z + size_z*0.5)
 
         return cls.from_bounding_box(network, bbox)
 
