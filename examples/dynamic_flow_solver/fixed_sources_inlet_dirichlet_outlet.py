@@ -5,16 +5,17 @@ and fixed wetting pressure at the outlet.
 The simulation stops when a domain saturation of 0.5 has been reached
 """
 
+import logging
+
 import numpy as np
-from pypnm.porenetwork.constants import WEST, EAST
-from pypnm.porenetwork.network_factory import unstructured_network_periodic_y, structured_network
 from pypnm.flow_simulation.dynamic_simulation import DynamicSimulation
 from pypnm.flow_simulation.simulation_bc import SimulationBoundaryCondition
-from sim_settings import sim_settings
-from pypnm.porenetwork.component import tube_list_ngh_to_pore_list, pore_list_ngh_to_pore_list
-import logging
+from pypnm.porenetwork.component import tube_list_ngh_to_pore_list
+from pypnm.porenetwork.network_factory import structured_network
 from pypnm.porenetwork.network_manipulation import remove_tubes_between_face_pores
-from pypnm.porenetwork.porenetwork import  PoreNetwork
+from pypnm.porenetwork.porenetwork import PoreNetwork
+from sim_settings import sim_settings
+
 logger = logging.getLogger('pypnm')
 logger.setLevel("INFO")
 import pstats
@@ -26,10 +27,9 @@ def dynamic_simulation():
         network = PoreNetwork.load("network.pkl")
     except IOError:
         # Generate small unstructured network.
-        network = unstructured_network_periodic_y(1000, quasi_2d=True)
         network = structured_network(40, 20, 20, periodic=True)
-        network = remove_tubes_between_face_pores(network, EAST)
-        network = remove_tubes_between_face_pores(network, WEST)
+        network = remove_tubes_between_face_pores(network, "EAST")
+        network = remove_tubes_between_face_pores(network, "WEST")
         dim = network.dim
         x = network.pores.x
         pi_uniform = (x < (np.min(x) + 0.2 * dim[0])).nonzero()[0]
@@ -50,8 +50,8 @@ def dynamic_simulation():
     bc = SimulationBoundaryCondition()
     q_total = sim_settings['dynamic']['q_n_inlet']   # All units are SI units
 
-    pi_inlet = network.pi_list_face[WEST]
-    pi_outlet = network.pi_list_face[EAST]
+    pi_inlet = network.pi_list_face["WEST"]
+    pi_outlet = network.pi_list_face["EAST"]
 
     bc.set_nonwetting_source(pi_inlet, q_total/len(pi_inlet)*np.ones(len(pi_inlet)))
     bc.set_pressure_outlet(pi_list=pi_outlet, p_wett=0.0)

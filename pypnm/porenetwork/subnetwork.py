@@ -51,7 +51,7 @@ class SubNetwork(PoreNetwork):
         return cls(sup_network, sup_pore_list)
 
     @classmethod
-    def centered_subnetwork(cls, network, size=0.5):
+    def centered_subnetwork(cls, network, size):
         L_x, L_y, L_z = network.dim
         x_min = np.min(network.pores.x)
         y_min = np.min(network.pores.y)
@@ -60,6 +60,19 @@ class SubNetwork(PoreNetwork):
         bbox = BoundingBox(xmin=x_min + 0.5 * L_x - size*0.5, xmax=x_min + 0.5 * L_x + size*0.5,
                            ymin=y_min + 0.5 * L_y - size*0.5, ymax=y_min + 0.5 * L_y + size*0.5,
                            zmin=z_min + 0.5 * L_z - size*0.5, zmax=z_min + 0.5 * L_z + size*0.5)
+
+        return cls.from_bounding_box(network, bbox)
+
+    @classmethod
+    def centered_subnetwork_rectangular(cls, network, size_x, size_y, size_z):
+        L_x, L_y, L_z = network.dim
+        x_min = np.min(network.pores.x)
+        y_min = np.min(network.pores.y)
+        z_min = np.min(network.pores.z)
+
+        bbox = BoundingBox(xmin=x_min + 0.5 * L_x - size_x*0.5, xmax=x_min + 0.5 * L_x + size_z*0.5,
+                           ymin=y_min + 0.5 * L_y - size_y*0.5, ymax=y_min + 0.5 * L_y + size_y*0.5,
+                           zmin=z_min + 0.5 * L_z - size_z*0.5, zmax=z_min + 0.5 * L_z + size_x*0.5)
 
         return cls.from_bounding_box(network, bbox)
 

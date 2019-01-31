@@ -1,7 +1,8 @@
 """
-This example sets up a dynamic two-phase flow simulation in a pore network.
+This example sets up a dynamic two-phase flow simulation in a 1D pore network.
 The boundary conditions are set to be fixed wetting and nonwetting pressure at the inlet
-and fixed wetting pressure at the outlet.
+and fixed wetting pressure at the outlet. The flow can stagnate in the moddle of the domain if the inlet pressure does
+not exceed the required entry pressure of any one domain throat.
 """
 
 import logging
@@ -9,7 +10,7 @@ import logging
 from pypnm.flow_simulation.dynamic_simulation import DynamicSimulation
 from pypnm.flow_simulation.simulation_bc import SimulationBoundaryCondition
 from pypnm.porenetwork.constants import WEST, EAST
-from pypnm.porenetwork.network_factory import unstructured_network_periodic_y
+from pypnm.porenetwork.network_factory import structured_network
 from pypnm.porenetwork.network_manipulation import remove_tubes_between_face_pores
 from sim_settings import sim_settings
 
@@ -19,7 +20,7 @@ logger.setLevel("WARN")
 
 def dynamic_simulation():
     # Generate small unstructured network.
-    network = unstructured_network_periodic_y(20000, quasi_2d=True)
+    network = structured_network(40, 1, 1, periodic=False)
     network = remove_tubes_between_face_pores(network, EAST)
     network = remove_tubes_between_face_pores(network, WEST)
 
@@ -37,7 +38,7 @@ def dynamic_simulation():
     pi_inlet = network.pi_list_face[WEST]
     pi_outlet = network.pi_list_face[EAST]
 
-    bc.set_pressure_inlet(pi_list=pi_inlet, p_wett=12.e06, p_nwett=13.e06)
+    bc.set_pressure_inlet(pi_list=pi_inlet, p_wett=10.0, p_nwett=6.e05)
     bc.set_pressure_outlet(pi_list=pi_outlet, p_wett=0.0)
 
     simulation.set_boundary_conditions(bc)
@@ -58,12 +59,12 @@ def dynamic_simulation():
     simulation.add_vtk_output_tube_field(network.tubes.invaded, "Tube_invaded")
     simulation.write_vtk_output("initial_network")
 
-    for n in xrange(50):
-        print ("Advancing simulation with %g pore volumes" % delta_pvi)
-        simulation.advance_in_injected_volume(delta_pvi=delta_pvi)
-
+    for n in xrange(1000):
         simulation.write_vtk_output(label=n)
         simulation.write_to_hdf(label=n, folder_name="paraview_dyn_run")
+
+        print ("Advancing simulation by 1 second")
+        simulation.advance_in_time(delta_t=1.0)
         print "Nonwetting saturation:", simulation.nonwetting_saturation()
 
 

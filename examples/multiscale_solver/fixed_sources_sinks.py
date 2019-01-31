@@ -9,7 +9,7 @@ from pypnm.multiscale.multiscale_unstructured import MultiScaleSimUnstructured
 from pypnm.porenetwork.network_manipulation import remove_tubes_between_face_pores
 from PyTrilinos import Epetra
 from mpi4py import MPI
-from pypnm.porenetwork.porenetwork import  PoreNetwork
+from pypnm.porenetwork.porenetwork import PoreNetwork
 
 from sim_settings import sim_settings
 import logging
@@ -19,6 +19,7 @@ logger.setLevel("INFO")
 
 import pstats
 import cProfile
+
 
 def multiscale_simulation(restart):
     comm = Epetra.PyComm()
@@ -82,7 +83,7 @@ def multiscale_simulation(restart):
 
     print "starting simulation"
 
-    dt = 0.01*network_volume / q_total
+    dt = 0.01 * network_volume / q_total
     print "time step is", dt
 
     for i in xrange(40):
@@ -108,4 +109,3 @@ if __name__ == "__main__":
 
     cProfile.run(exec_string, 'restats')
     print_profiling_info('restats')
-
